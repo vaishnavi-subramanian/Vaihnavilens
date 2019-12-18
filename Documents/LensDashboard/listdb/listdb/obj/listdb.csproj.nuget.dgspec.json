@@ -1,0 +1,67 @@
+{
+  "format": 1,
+  "restore": {
+    "C:\\Users\\v-vasub\\Documents\\listdb\\listdb\\listdb.csproj": {}
+  },
+  "projects": {
+    "C:\\Users\\v-vasub\\Documents\\listdb\\listdb\\listdb.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\Users\\v-vasub\\Documents\\listdb\\listdb\\listdb.csproj",
+        "projectName": "listdb",
+        "projectPath": "C:\\Users\\v-vasub\\Documents\\listdb\\listdb\\listdb.csproj",
+        "packagesPath": "C:\\Users\\v-vasub\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\v-vasub\\Documents\\listdb\\listdb\\obj\\",
+        "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "C:\\Program Files\\dotnet\\sdk\\NuGetFallbackFolder"
+        ],
+        "configFilePaths": [
+          "C:\\Users\\v-vasub\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net472"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net472": {
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        }
+      },
+      "frameworks": {
+        "net472": {
+          "dependencies": {
+            "Microsoft.Azure.Kusto.Data": {
+              "target": "Package",
+              "version": "[8.0.3, )"
+            },
+            "Microsoft.Azure.Kusto.Data.NETStandard": {
+              "target": "Package",
+              "version": "[6.1.8, )"
+            },
+            "Microsoft.Azure.Management.Kusto": {
+              "target": "Package",
+              "version": "[3.0.0, )"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\3.0.100\\RuntimeIdentifierGraph.json"
+        }
+      },
+      "runtimes": {
+        "win7-x86": {
+          "#import": []
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,330 @@
+{
+  "id": "fe65dbdb24e44826b1905ee9245117f5",
+  "name": "CPI",
+  "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+  "provider": "Dso",
+  "scenario": "",
+  "description": "",
+  "tags": "",
+  "config": {
+    "jobName": "fe65dbdb24e44826b1905ee9245117f5",
+    "jobDisplayName": "CPI",
+    "jobDescription": "",
+    "tags": "",
+    "maxJobInstances": 1,
+    "isDebug": false,
+    "appendUtcIndicator": false,
+    "allocationType": 0,
+    "jobScheduleSettings": {
+      "scheduleType": "Frequency",
+      "frequencySettings": {
+        "cronSchedule": "0 15 23 */1 * *",
+        "backFill": false,
+        "monthly": false
+      }
+    },
+    "defaultICMAlerts": false,
+    "activities": [
+      {
+        "activityDisplayName": "CPI - VM Orchestration Throughput",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "930e1bdb-6cf0-458e-996b-e12c04e87d25",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxsize=128000000;alias database db = cluster('{cluster}').database('{database}');\r\nunion database(\"db\").['ETL-Microsoft-AzureStack-Common-Infrastructure-WebApi.HttpServerRequest*'] \r\n| where RequestUri contains @\"14104/virtualmachines\"\r\n| summarize OccurrenceTime=max(OccurrenceTime),Duration=max(OccurrenceTime)-min(OccurrenceTime),CorrelationRequestId=any(CorrelationRequestId),StatusTime=arg_max(OccurrenceTime,ResponseStatusCode),MethodTime=arg_min(OccurrenceTime,Method) by ClientRequestId\r\n| where isempty(ResponseStatusCode)==false\r\n| project-away StatusTime,MethodTime\r\n| extend DurationInSeconds=Duration/1s\r\n  "
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "CPI - VM Orchestration Throughput"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "CPI - VM Orchestration Operation Times",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "02d0ce5a-5c4c-4617-8e89-f03912a1805c",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxsize=128000000;alias database db = cluster('{cluster}').database('{database}');\r\nunion database(\"db\").['ETL-Microsoft-AzureStack-Common-Infrastructure-WebApi.HttpServerRequest*'] \r\n| where RequestUri contains @\"14104/virtualmachines\"\r\n| summarize OccurrenceTime=max(OccurrenceTime),Duration=max(OccurrenceTime)-min(OccurrenceTime),CorrelationRequestId=any(CorrelationRequestId),StatusTime=arg_max(OccurrenceTime,ResponseStatusCode),MethodTime=arg_min(OccurrenceTime,Method) by ClientRequestId\r\n| where isempty(ResponseStatusCode)==false\r\n| project-away StatusTime,MethodTime\r\n| extend DurationInSeconds=Duration/1s"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "CPI - VM Orchestration Operation Times"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "CPI 555 http response errors",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "dc13556f-7525-4e6c-9624-6fb23bbbc27d",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": " set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\ndatabase(\"db\").['ETL-Microsoft-AzureStack-Common-Infrastructure-WebApi.HttpServerRequestStop'] \r\n| where RequestUri contains \"14104/virtualMachines\"\r\n| where ResponseStatusCode == \"555\"\r\n| where Method == \"PUT\" or Method == \"DELETE\"\r\n| extend Troubleshoot=\"Troubleshoot\",FullSearch=\"Full Search\",Code=extractjson(@\"$Error.Code\",ResponseBody), Message=extractjson(@\"$Error.Message\",ResponseBody)\r\n| distinct OccurrenceTime,ClientRequestId,CorrelationRequestId,Troubleshoot,FullSearch,Method,Code,Message\r\n| extend Cluster='{cluster}', Database='{database}'"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "CPI 555 http response errors"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "CPI - Cluster Orchestration Throughput",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "9ab0b52d-7e22-4b40-abe8-b32d5c0479f0",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nunion database(\"db\").['ETL-Microsoft-AzureStack-Common-Infrastructure-WebApi.HttpServerRequest*'] \r\n| where RequestUri contains @\"14105/clusters\"\r\n| summarize OccurrenceTime=max(OccurrenceTime),Duration=max(OccurrenceTime)-min(OccurrenceTime),CorrelationRequestId=any(CorrelationRequestId),StatusTime=arg_max(OccurrenceTime,ResponseStatusCode),MethodTime=arg_min(OccurrenceTime,Method) by ClientRequestId\r\n| where isempty(ResponseStatusCode)==false\r\n| project-away StatusTime,MethodTime\r\n| extend DurationInSeconds=Duration/1s\r\n| summarize count_=count() by bin(OccurrenceTime, time(1h)),ResponseStatusCode,tostring(Method) | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "CPI - Cluster Orchestration Throughput"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "CPI - Cluster Refresh - Memory",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "c029818d-10a0-4658-9a99-f866b172e6b7",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(OccurrenceTime:datetime,ClusterFqdn:string,TotalUsedMemoryAndClusterReserve:long)[];\r\nunion isfuzzy=true view,(\r\n    database(\"db\").['ETL-Microsoft-AzureStack-Fabric-Compute-ClusterManager.ClusterRefreshV2Stop']\r\n    | distinct OccurrenceTime,ClusterFqdn,tolong(TotalUsedMemoryAndClusterReserve)\r\n)\r\n| project TotalUsedMemoryAndClusterReserve,OccurrenceTime,ClusterFqdn | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "CPI - Cluster Refresh - Memory"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Process data",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "7413e0b4-532d-4871-8738-9974f0d5f44c",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxsize=192000000;alias database db = cluster('{cluster}').database('{database}');\r\ndatabase('db').['ETL-Microsoft-AzureStack-Common-Powershell.PowerShellOperationStop']\r\n| where Cmdlet contains \"-cpi\"\r\n| distinct OccurrenceTime, CorrelationRequestId,Cmdlet,Success,DurationMs\r\n| extend verb=extract(@\"(\\w*)(?:-\\w*)\",1,Cmdlet)\r\n| extend Succeeded=iff(Success==1, 1, 0) \r\n| extend Failed=iff(Success==1, 0,1)\r\n  "
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "CPI - Jea Cmdlet throughput"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      }
+    ],
+    "project": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342",
+    "context": {
+      "uiCron": {
+        "freq": "day",
+        "rate": 1,
+        "value": "0 15 23 */1 * *",
+        "isEntered": false,
+        "hourMins": 17,
+        "minuteSecs": 9,
+        "time": "2019-10-03T06:15:33.509Z",
+        "weekDays": [
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "monthDay": 1
+      },
+      "lensScenario": null,
+      "lensCreatedBy": "v-vasub",
+      "lensCreatedDate": "2019-10-02T23:19:02.4626649Z",
+      "lensModifiedBy": "v-vasub",
+      "lensModifiedDate": "2019-10-02T23:33:18.7378188Z"
+    },
+    "failureWebhook": {
+      "url": "https://lens.msftcloudes.com/share/jobnotificationemail",
+      "aadResource": "aa0c39bf-5086-4900-bf89-6404bff62cf8",
+      "aadTenant": "microsoft.onmicrosoft.com"
+    }
+  },
+  "createdBy": "v-vasub",
+  "createdDate": "2019-10-02T23:19:02.4626649Z",
+  "nextExecutionDate": "2019-10-03T23:15:00Z",
+  "modifiedBy": "v-vasub",
+  "modifiedDate": "2019-10-02T23:33:18.7378188Z",
+  "version": "7",
+  "isEnabled": true,
+  "isQuarantined": false,
+  "instances": [
+    {
+      "id": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342|fe65dbdb24e44826b1905ee9245117f5|M|2019-10-02T23:33:43.3897760Z",
+      "jobId": "fe65dbdb24e44826b1905ee9245117f5",
+      "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+      "status": "Succeeded",
+      "jobStatus": "0",
+      "errorMsg": null,
+      "createdDate": "2019-10-02T23:33:43Z",
+      "startTime": "2019-10-02T23:33:43Z",
+      "endTime": "2019-10-02T23:34:28Z",
+      "elapsedTime": "2019-10-03T00:00:44.9447406Z",
+      "seed": "2019-10-01T23:15:00Z",
+      "logLink": "https://analytics.applicationinsights.io/subscriptions/56dcf710-f955-442e-8ac2-3b90ab65dea1/resourcegroups/datastudioorchestrator/components/datastudiojobs?q=H4sIAAAAAAAEAFWQQU%2fDMAyF70j8B9%2fWigyyFjFWqZyQ0KSBNNH7FBILgto0JCmsaD8eZ103dkrs57znL53RrYHE4VeHPviUQaLQolFopMZ9HZyQ6GEHuA0kgMIgdO2hBNUb0WiZmK6u0%2fgUtxJtIMc4bl37iTJA0A1Zi8YyaC06EfXNUjGgx0gu2hh0TetD1VtkQMNevJ8Jz0OLjdHp5cUOfj7Q4ZkjlCVMrL1x69W6%2f31alhMQtO8xHx5oZREwNpKMzxbTGZ%2fyrMryIs%2bL2%2fw6v1%2fM53f8ivOC833IyFCNDLTv0Y%2fBK36j06Ff0VmT5P%2fXDF4GwMjJ4ABBUwdCBo%2bnnxxukat1Ch289XDKVOjlH98TYJapAQAA&apptype=web",
+      "elapsedMilliseconds": 44944,
+      "parameters": {
+        "startDateTime": "2019-10-01T23:15:00Z",
+        "endDateTime": "2019-10-02T23:15:00Z"
+      },
+      "segments": [
+        {
+          "segmentId": "930e1bdb-6cf0-458e-996b-e12c04e87d25",
+          "startTime": "2019-10-02T23:33:43.4684445Z",
+          "endTime": "2019-10-02T23:33:50.6867029Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "CPI - VM Orchestration Throughput"
+        },
+        {
+          "segmentId": "02d0ce5a-5c4c-4617-8e89-f03912a1805c",
+          "startTime": "2019-10-02T23:33:50.7179842Z",
+          "endTime": "2019-10-02T23:33:57.6240239Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "CPI - VM Orchestration Operation Times"
+        },
+        {
+          "segmentId": "dc13556f-7525-4e6c-9624-6fb23bbbc27d",
+          "startTime": "2019-10-02T23:33:57.6396334Z",
+          "endTime": "2019-10-02T23:34:04.6393556Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "CPI 555 http response errors"
+        },
+        {
+          "segmentId": "9ab0b52d-7e22-4b40-abe8-b32d5c0479f0",
+          "startTime": "2019-10-02T23:34:04.6706051Z",
+          "endTime": "2019-10-02T23:34:11.6974567Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "CPI - Cluster Orchestration Throughput"
+        },
+        {
+          "segmentId": "c029818d-10a0-4658-9a99-f866b172e6b7",
+          "startTime": "2019-10-02T23:34:11.7130443Z",
+          "endTime": "2019-10-02T23:34:18.6535765Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "CPI - Cluster Refresh - Memory"
+        },
+        {
+          "segmentId": "7413e0b4-532d-4871-8738-9974f0d5f44c",
+          "startTime": "2019-10-02T23:34:18.6839784Z",
+          "endTime": "2019-10-02T23:34:25.8685612Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Process data"
+        }
+      ],
+      "groupId": null
+    }
+  ],
+  "shareType": "shared",
+  "eTag": ""
+}

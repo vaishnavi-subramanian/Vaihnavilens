@@ -1,0 +1,360 @@
+{
+  "id": "d3b944e958ed4633a6820a3d322b5259",
+  "name": "CRP",
+  "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+  "provider": "Dso",
+  "scenario": "",
+  "description": "",
+  "tags": "",
+  "config": {
+    "jobName": "d3b944e958ed4633a6820a3d322b5259",
+    "jobDisplayName": "CRP",
+    "jobDescription": "",
+    "tags": "",
+    "maxJobInstances": 1,
+    "isDebug": false,
+    "appendUtcIndicator": false,
+    "allocationType": 0,
+    "jobScheduleSettings": {
+      "scheduleType": "Frequency",
+      "frequencySettings": {
+        "cronSchedule": "0 26 17 */1 * *",
+        "backFill": false,
+        "monthly": false
+      }
+    },
+    "defaultICMAlerts": false,
+    "activities": [
+      {
+        "activityDisplayName": "ComputePerf-VMPUT",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "42f9803c-6d62-45e7-bb1e-8fb925fc0f5d",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxsize=192000000;alias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(Succeeded:int,Failed:int,DurationInMin:long,OccurrenceTime:datetime)[];\r\nunion isfuzzy=true view,(\r\n    database('db').['ETL-CrpServiceEventSource.ApiQosEvent']\r\n    | where OperationName startswith \"VirtualMachines.\" and not(OperationName endswith \"GET\")\r\n    | distinct OccurrenceTime,OperationName,ResultType,CorrelationId,E2EDurationInMilliseconds,ResourceName,ErrorDetails\r\n    | extend extracted=extractall(@\"(?:VirtualMachines\\.)(\\w*)(?:\\.)(DELETE|PUT|POST)\", OperationName)\r\n    | extend Method=tostring(extracted[0][1]), OpType=tostring(extracted[0][0])\r\n    | project-away extracted\r\n    | join kind=leftouter (\r\n        database('db').['ETL-Microsoft-AzureStack-Compute-Pipeline.VmPipelineRunStop']\r\n        | distinct OccurrenceTime,VmName,CorrelationId,DurationInMs,Exception\r\n        | summarize DurationInMs=sum(DurationInMs),Exception=any(Exception) by VmName,CorrelationId)\r\n    on CorrelationId,$left.ResourceName == $right.VmName\r\n    | where Method==\"PUT\"\r\n    | extend Succeeded=toint(isempty(Exception) and isempty(ErrorDetails) and (ResultType==0 or ResultType==1))\r\n    | extend Failed=toint(1-Succeeded)\r\n    | extend DurationInMin=coalesce(DurationInMs/60000,E2EDurationInMilliseconds/60000,0)\r\n    | project Succeeded,Failed,DurationInMin,OccurrenceTime\r\n)"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "CRP_VM_PUT_Operation"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "VMCreationFailure_ResultCode",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "fbe09574-b561-40c7-b514-cf3fc1e4d34e",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\ndatabase('db').['ETL-CrpServiceEventSource.ApiQosEvent']\r\n| where OperationName startswith \"VirtualMachines.\" and not(OperationName endswith \"GET\")\r\n| distinct OccurrenceTime,OperationName,ResourceName,ResultType,DurationInMilliseconds,ResultCode,CorrelationId,ErrorDetails\r\n| where notempty(ResultCode)\r\n| summarize OccurrenceTime=max(OccurrenceTime),VmName=any(ResourceName),ResultType=any(ResultType),FirstToLastInMs=tolong((max(OccurrenceTime)-min(OccurrenceTime))/1ms),ErrorDetails=any(ErrorDetails) by CorrelationId,ResultCode\r\n| join kind=leftouter (\r\n    database('db').['ETL-Microsoft-AzureStack-Compute-Pipeline.VmPipelineRunStop']\r\n    | distinct OccurrenceTime,VmName,CorrelationId,DurationInMs,Exception\r\n    | summarize DurationInMs=sum(DurationInMs),Exception=any(Exception) by VmName,CorrelationId)\r\non CorrelationId,VmName\r\n| extend Duration=iff(DurationInMs>FirstToLastInMs,DurationInMs,FirstToLastInMs), isSuccess=(isempty(Exception) and isempty(ErrorDetails) and (ResultType==0 or ResultType==1))\r\n| where not(isSuccess)\r\n| where notempty(ResultCode)\r\n| extend Example=pack(\"Exception\",Exception, \"ErrorDetails\", ErrorDetails, \"CorrelationId\", CorrelationId, \"OccurrenceTime\", OccurrenceTime)\r\n| summarize count(),Example=any(tostring(Example)) by ResultCode\r\n| order by count_ desc\r\n| project ResultCode,count_,Example=toobject(Example)\r\n| project ResultCode,count_,ExampleCorrelationId=tostring(Example.CorrelationId),ExampleException=tostring(Example.Exception),ExampleOccurrenceTime=todatetime(Example.OccurrenceTime),ExampleErrorDetails=tostring(Example.ErrorDetails),Cluster='{cluster}', Database='{database}'\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "CRP_VM_creation_Failure"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "GoalSeeking_Exception_/hr",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "8db0483b-deb4-4c9c-ad85-2972243defbf",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(OccurrenceTime:datetime,exType:string,exMessage:string)[];\r\nlet startTime = toscalar(database(\"db\").['ETL-Microsoft-AzureStack-Compute-Pipeline.VmPipelineRunStop'] | summarize min(OccurrenceTime));\r\nlet endTime = toscalar(database(\"db\").['ETL-Microsoft-AzureStack-Compute-Pipeline.VmPipelineRunStop'] | summarize max(OccurrenceTime));\r\nlet bintype = 1h;\r\nlet zeroTimeTable =  (range x from 1 to 1 step 1\r\n    | mvexpand OccurrenceTime = range(startTime, endTime, bintype) to typeof(datetime));\r\nlet goalseekingfaults = (\r\n    database(\"db\").['ETL-CrpServiceEventSource.ContextActivity']\r\n    | distinct OccurrenceTime, Message\r\n    | where Message contains \"Microsoft.Azure.ResourceProvider.GoalSeeking.GoalSeekingException: \"\r\n    | extend exType=extract(@\"Microsoft.Azure.ResourceProvider.GoalSeeking.GoalSeekingException: ([\\w]*): (.*)\", 1,Message)\r\n    | extend exMessage=extract(@\"Microsoft.Azure.ResourceProvider.GoalSeeking.GoalSeekingException: ([\\w]*): (.*)\", 2,Message)\r\n    | project OccurrenceTime, exType, exMessage);\r\nunion isfuzzy=true goalseekingfaults,zeroTimeTable,view\r\n| summarize Count=countif(isempty(exType)==false) by  bin(OccurrenceTime, bintype), exType\r\n| summarize sum(Count) by bin(OccurrenceTime, time(1h)) | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "CRP_Goal_Seeking_Exception"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "GoalSeeking_Exceptions",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "08015d2c-0aae-4486-8455-a703e1610547",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "\r\nset query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\ndatabase(\"db\").['ETL-CrpServiceEventSource.ContextActivity']\r\n| where Message contains \"Microsoft.Azure.ResourceProvider.GoalSeeking.GoalSeekingException: \"\r\n| distinct OccurrenceTime, Message, GoalStateResourceId\r\n| extend exType=extract(@\"Microsoft.Azure.ResourceProvider.GoalSeeking.GoalSeekingException: ([\\w]*): (.*)\", 1,Message)\r\n| project Cluster='{cluster}', Database='{database}',GoalStateResourceId, Exception=exType\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "CRP_Goal_Seeking_Exceptions"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      }
+    ],
+    "project": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342",
+    "context": {
+      "uiCron": {
+        "freq": "day",
+        "rate": 1,
+        "value": "0 26 17 */1 * *",
+        "isEntered": false,
+        "hourMins": 53,
+        "minuteSecs": 0,
+        "time": "2019-10-02T00:26:46.955Z",
+        "weekDays": [
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "monthDay": 1
+      },
+      "lensScenario": null,
+      "lensCreatedBy": "v-vasub",
+      "lensCreatedDate": "2019-10-01T17:29:03.8912332Z",
+      "lensModifiedBy": "v-vasub",
+      "lensModifiedDate": "2019-10-01T20:00:03.2557905Z"
+    },
+    "failureWebhook": {
+      "url": "https://lens.msftcloudes.com/share/jobnotificationemail",
+      "aadResource": "aa0c39bf-5086-4900-bf89-6404bff62cf8",
+      "aadTenant": "microsoft.onmicrosoft.com"
+    }
+  },
+  "createdBy": "v-vasub",
+  "createdDate": "2019-10-01T17:29:03.8912332Z",
+  "nextExecutionDate": "2019-10-03T17:26:00Z",
+  "modifiedBy": "v-vasub",
+  "modifiedDate": "2019-10-01T20:00:03.2557905Z",
+  "version": "10",
+  "isEnabled": true,
+  "isQuarantined": false,
+  "instances": [
+    {
+      "id": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342|d3b944e958ed4633a6820a3d322b5259|T|2019-10-02T17:26:00.0000000Z",
+      "jobId": "d3b944e958ed4633a6820a3d322b5259",
+      "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+      "status": "Succeeded",
+      "jobStatus": "0",
+      "errorMsg": null,
+      "createdDate": "2019-10-02T17:26:00Z",
+      "startTime": "2019-10-02T17:26:00Z",
+      "endTime": "2019-10-02T17:26:34Z",
+      "elapsedTime": "2019-10-03T00:00:34.3611049Z",
+      "seed": "2019-10-01T17:26:00Z",
+      "logLink": "https://analytics.applicationinsights.io/subscriptions/56dcf710-f955-442e-8ac2-3b90ab65dea1/resourcegroups/datastudioorchestrator/components/datastudiojobs?q=H4sIAAAAAAAEAFWQMU%2fDMBCFdyT%2bw21NVBc5KQ1QKUwsIMLSdEaufSquEifYDjRSfzznpmnpZN%2b983v3uTO6MRBZ%2fO7QeRcziBS2aBQaqfFYeyskOjgA7j0JoNALXTnIQfVG1FpGpquqODzFvcTWk2MYb22zQ%2bnB65qsRd0yaFq0Iuifr4oBPUZy0cagrRvny75FBjTsxPZKKIYWG6Pj25sD%2fH6hxStHyHOYbP1mV9xPV2%2fFOp%2bAoH3P%2bfBMKwuPoRGlPHmaJXzG0zJ5WKbZkvO7xTx7zBbzKedUHUNGhnJkoH3PfgxW%2bINW%2b%2f6dzook979m8DEABk4GJwiaOhEyeLn85HALXI1VaGHTwyVToZN%2fqoqaqakBAAA%3d&apptype=web",
+      "elapsedMilliseconds": 34361,
+      "parameters": {
+        "startDateTime": "2019-10-01T17:26:00Z",
+        "endDateTime": "2019-10-02T17:26:00Z"
+      },
+      "segments": [
+        {
+          "segmentId": "42f9803c-6d62-45e7-bb1e-8fb925fc0f5d",
+          "startTime": "2019-10-02T17:26:00.6149543Z",
+          "endTime": "2019-10-02T17:26:15.2109243Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "ComputePerf-VMPUT"
+        },
+        {
+          "segmentId": "fbe09574-b561-40c7-b514-cf3fc1e4d34e",
+          "startTime": "2019-10-02T17:26:15.2264923Z",
+          "endTime": "2019-10-02T17:26:21.7860105Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "VMCreationFailure_ResultCode"
+        },
+        {
+          "segmentId": "8db0483b-deb4-4c9c-ad85-2972243defbf",
+          "startTime": "2019-10-02T17:26:21.8016236Z",
+          "endTime": "2019-10-02T17:26:28.3087821Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "GoalSeeking_Exception_/hr"
+        },
+        {
+          "segmentId": "08015d2c-0aae-4486-8455-a703e1610547",
+          "startTime": "2019-10-02T17:26:28.3211425Z",
+          "endTime": "2019-10-02T17:26:34.8823283Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "GoalSeeking_Exceptions"
+        }
+      ],
+      "groupId": null
+    },
+    {
+      "id": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342|d3b944e958ed4633a6820a3d322b5259|M|2019-10-01T20:12:25.2098568Z",
+      "jobId": "d3b944e958ed4633a6820a3d322b5259",
+      "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+      "status": "Succeeded",
+      "jobStatus": "0",
+      "errorMsg": null,
+      "createdDate": "2019-10-01T20:12:25Z",
+      "startTime": "2019-10-01T20:12:25Z",
+      "endTime": "2019-10-01T20:12:59Z",
+      "elapsedTime": "2019-10-03T00:00:34.3807108Z",
+      "seed": "2019-09-30T17:26:00Z",
+      "logLink": "https://analytics.applicationinsights.io/subscriptions/56dcf710-f955-442e-8ac2-3b90ab65dea1/resourcegroups/datastudioorchestrator/components/datastudiojobs?q=H4sIAAAAAAAEAFWQzW7CMBCE75X6DnsjEaZyIlFBpHDi0Ko%2fqGruyLVX1FXiuLbTEomH75oQKCd7d9Yz%2b7kzujWQOPzu0AefMkgUWjQKjdR4rIMTEj0cAPeBBFAYhK49lKB6IxotE9PVdRqf4l6iDeQYx61rv1AGCLoha9FYBq1FJ6K%2bfVQM6DGSizYGXdP6UPUWGdCwF7sr4WVosTE6vb05wO8nOrxyhLKEyebhqXub2h3f8HICgvY958OKVhYBYyPJebacZXzGsyrnRZYX%2bfwu58vF%2fH4x5bzg%2fBgyMlQjA%2b179mPwjj%2fodOif6axJ8v9rBq8DYORkcIKgqRMhg%2fXlJ4db5GqdQgcfPVwyFXr5B%2fG18FOpAQAA&apptype=web",
+      "elapsedMilliseconds": 34380,
+      "parameters": {
+        "startDateTime": "2019-09-30T17:26:00Z",
+        "endDateTime": "2019-10-01T17:26:00Z"
+      },
+      "segments": [
+        {
+          "segmentId": "42f9803c-6d62-45e7-bb1e-8fb925fc0f5d",
+          "startTime": "2019-10-01T20:12:25.241059Z",
+          "endTime": "2019-10-01T20:12:28.7723131Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "ComputePerf-VMPUT"
+        },
+        {
+          "segmentId": "fbe09574-b561-40c7-b514-cf3fc1e4d34e",
+          "startTime": "2019-10-01T20:12:28.7879256Z",
+          "endTime": "2019-10-01T20:12:36.3729004Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "VMCreationFailure_ResultCode"
+        },
+        {
+          "segmentId": "8db0483b-deb4-4c9c-ad85-2972243defbf",
+          "startTime": "2019-10-01T20:12:36.3885262Z",
+          "endTime": "2019-10-01T20:12:46.0685408Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "GoalSeeking_Exception_/hr"
+        },
+        {
+          "segmentId": "08015d2c-0aae-4486-8455-a703e1610547",
+          "startTime": "2019-10-01T20:12:46.0841937Z",
+          "endTime": "2019-10-01T20:12:55.7623988Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "GoalSeeking_Exceptions"
+        }
+      ],
+      "groupId": null
+    },
+    {
+      "id": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342|d3b944e958ed4633a6820a3d322b5259|M|2019-10-01T19:14:40.9656561Z",
+      "jobId": "d3b944e958ed4633a6820a3d322b5259",
+      "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+      "status": "Failed",
+      "jobStatus": "5",
+      "errorMsg": "{\"exceptionMessage\":\"Forbidden (403-Forbidden): Forbidden: Caller is not authorized to perform this action\\r\\nPrincipal 'aadapp=63a82f84-4e3d-49ae-bbbc-8ef7bef5b612;72f988bf-86f1-41af-91ab-2d7cd011db47' is not authorized to access database 'TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33'.\\r\\nPlease provide the following information when contacting the Kusto team:\\r\\nClientRequestId='GdZ2DDbLKxo=.1', ActivityId='486007e8-acb7-49b0-9f91-2c63cff7e57a', Timestamp='2019-10-01T19:14:42.1287618Z'.. This normally represents a permanent error, and retrying is unlikely to help.\\r\\nPlease provide the following information when contacting the Kusto team @ https://aka.ms/kustosupport :\\r\\nDataSource='https://masvaas.kusto.windows.net/v1/rest/query',\\r\\nDatabaseName='TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33',\\r\\nClientRequestId='GdZ2DDbLKxo=.1',\\r\\nActivityId='486007e8-acb7-49b0-9f91-2c63cff7e57a,\\r\\nTimestamp='2019-10-01T19:14:42.1364389Z'.\",\"exceptionType\":\"Orchestrator.Exceptions.ActivityFailureException\",\"stackTrace\":\"   at FrontEnd.WorkerPools.WorkerPoolManager.<RunInstanceAsync>d__12.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\WorkerPools\\\\WorkerPoolManager.cs:line 451\\r\\n   at FrontEnd.WorkerPools.WorkerPoolManager.<RunAsync>d__10.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\WorkerPools\\\\WorkerPoolManager.cs:line 126\",\"innerException\":{\"exceptionMessage\":\"Forbidden (403-Forbidden): Forbidden: Caller is not authorized to perform this action\\r\\nPrincipal 'aadapp=63a82f84-4e3d-49ae-bbbc-8ef7bef5b612;72f988bf-86f1-41af-91ab-2d7cd011db47' is not authorized to access database 'TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33'.\\r\\nPlease provide the following information when contacting the Kusto team:\\r\\nClientRequestId='GdZ2DDbLKxo=.1', ActivityId='486007e8-acb7-49b0-9f91-2c63cff7e57a', Timestamp='2019-10-01T19:14:42.1287618Z'.. This normally represents a permanent error, and retrying is unlikely to help.\\r\\nPlease provide the following information when contacting the Kusto team @ https://aka.ms/kustosupport :\\r\\nDataSource='https://masvaas.kusto.windows.net/v1/rest/query',\\r\\nDatabaseName='TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33',\\r\\nClientRequestId='GdZ2DDbLKxo=.1',\\r\\nActivityId='486007e8-acb7-49b0-9f91-2c63cff7e57a,\\r\\nTimestamp='2019-10-01T19:14:42.1364389Z'.\",\"exceptionType\":\"Orchestrator.Exceptions.OrchestratorException\",\"stackTrace\":\"   at FrontEnd.Clients.WorkerPoolClient.ThrowWorkerException(HttpStatusCode statusCode, String contextName, ExceptionResponse exceptionResponse) in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\Clients\\\\WorkerPoolClient.cs:line 90\\r\\n   at FrontEnd.Clients.WorkerPoolClient.<GetOperationStatusAsync>d__9.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\Clients\\\\WorkerPoolClient.cs:line 277\\r\\n   at FrontEnd.WorkerPools.WorkerPoolManager.<WaitForOperationToCompleteAsync>d__14.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\WorkerPools\\\\WorkerPoolManager.cs:line 527\\r\\n   at FrontEnd.WorkerPools.WorkerPoolManager.<RunInstanceAsync>d__12.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\WorkerPools\\\\WorkerPoolManager.cs:line 372\",\"innerException\":{\"exceptionMessage\":\"Forbidden (403-Forbidden): Forbidden: Caller is not authorized to perform this action\\r\\nPrincipal 'aadapp=63a82f84-4e3d-49ae-bbbc-8ef7bef5b612;72f988bf-86f1-41af-91ab-2d7cd011db47' is not authorized to access database 'TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33'.\\r\\nPlease provide the following information when contacting the Kusto team:\\r\\nClientRequestId='GdZ2DDbLKxo=.1', ActivityId='486007e8-acb7-49b0-9f91-2c63cff7e57a', Timestamp='2019-10-01T19:14:42.1287618Z'.. This normally represents a permanent error, and retrying is unlikely to help.\\r\\nPlease provide the following information when contacting the Kusto team @ https://aka.ms/kustosupport :\\r\\nDataSource='https://masvaas.kusto.windows.net/v1/rest/query',\\r\\nDatabaseName='TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33',\\r\\nClientRequestId='GdZ2DDbLKxo=.1',\\r\\nActivityId='486007e8-acb7-49b0-9f91-2c63cff7e57a,\\r\\nTimestamp='2019-10-01T19:14:42.1364389Z'.\",\"exceptionType\":\"Kusto.Data.Exceptions.KustoRequestDeniedException\",\"stackTrace\":\"   at Kusto.Data.Net.Client.RestClient2.<ThrowKustoExceptionFromResponseMessageAsync>d__45.MoveNext()\\r\\n   at Kusto.Data.Net.Client.RestClient2.<MakeHttpRequestAsyncImpl>d__41.MoveNext()\\r\\n   at Kusto.Cloud.Platform.Utils.MonitoredActivity.<InvokeAsync>d__15`2.MoveNext()\\r\\n   at Kusto.Cloud.Platform.Utils.MonitoredActivity.<InvokeAsync>d__15`2.MoveNext()\\r\\n   at Kusto.Data.Net.Client.RestClient2.<MakeHttpRequestAsync>d__39.MoveNext()\\r\\n   at Kusto.Data.Net.Client.RestClient2.<ExecuteQueryAsync>d__28.MoveNext()\\r\\n   at Shared.Clients.KustoClient.<ExecuteQueryAsync>d__54.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Clients\\\\KustoClient.cs:line 825\\r\\n   at Shared.Clients.KustoClient.<>c__DisplayClass31_0.<<QueryTableAsync>b__0>d.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Clients\\\\KustoClient.cs:line 368\\r\\n   at Shared.Utilities.RetryUtility.<RetryAsync>d__14`2.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Utilities\\\\RetryUtility.cs:line 394\\r\\n   at Shared.Utilities.RetryUtility.<RetryAsync>d__3`1.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Utilities\\\\RetryUtility.cs:line 0\\r\\n   at Shared.Clients.KustoClient.<QueryTableAsync>d__31.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Clients\\\\KustoClient.cs:line 368\\r\\n   at Shared.Clients.KustoClient.<GetSchemaAsync>d__32.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Clients\\\\KustoClient.cs:line 378\\r\\n   at Worker.WorkerPools.DataStudioMovementWorkerPool.<CopyTableAsync>d__28.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Worker\\\\WorkerPools\\\\DataStudioMovementWorkerPool.cs:line 1515\\r\\n   at Worker.WorkerPools.DataStudioMovementWorkerPool.<RunActivityKustoToKustoAsync>d__27.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Worker\\\\WorkerPools\\\\DataStudioMovementWorkerPool.cs:line 1407\\r\\n   at Worker.WorkerPools.DataStudioMovementWorkerPool.<RunActivityAsync>d__21.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Worker\\\\WorkerPools\\\\DataStudioMovementWorkerPool.cs:line 1204\\r\\n   at Worker.Controllers.JobActivityController.<>c__DisplayClass10_0.<<RunActivityAsync>b__0>d.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Worker\\\\Controllers\\\\JobActivityController.cs:line 350\"}}}",
+      "createdDate": "2019-10-01T19:14:40Z",
+      "startTime": "2019-10-01T19:14:41Z",
+      "endTime": "2019-10-01T19:14:45Z",
+      "elapsedTime": "2019-10-03T00:00:04.1240585Z",
+      "seed": "2019-09-30T17:26:00Z",
+      "logLink": "https://analytics.applicationinsights.io/subscriptions/56dcf710-f955-442e-8ac2-3b90ab65dea1/resourcegroups/datastudioorchestrator/components/datastudiojobs?q=H4sIAAAAAAAEAFVQS0vEMBC%2bC%2f6HuW2LWUmWVWihngoirl7syYtkm0EjbVKTVFvYH%2b9ku90HOSQz38z3SG%2b0NZA4%2fOnRB58ySBR2aBSaWuO%2bDk7W6GEHOAQCQGGQuvFQgBqNbHWdmL5p0riKQ41dIMY43jn7jXWAoFuilm3HwHboZMQ%2fnhQDWkZi0caga60P1dghAxr28vMCeJlabJZOr6928PeFDi8YoShg8ajeV2W53TwPtliAJL9HfXggyzJgbCQrLrKl4EsuKpHlYp2v%2bW12f0dH3HCec74XmTNUcwbye%2bRj8Ia%2f6HQYN3Q3BPnzmsHrFDDmZHAIQVOHhAzK009Or5jLOoUOtiOcNBX6%2bh80vPukqQEAAA%3d%3d&apptype=web",
+      "elapsedMilliseconds": 4124,
+      "parameters": {
+        "startDateTime": "2019-09-30T17:26:00Z",
+        "endDateTime": "2019-10-01T17:26:00Z"
+      },
+      "segments": [
+        {
+          "segmentId": "42f9803c-6d62-45e7-bb1e-8fb925fc0f5d",
+          "startTime": "2019-10-01T19:14:41.0115594Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "ComputePerf-VMPUT"
+        },
+        {
+          "segmentId": "fbe09574-b561-40c7-b514-cf3fc1e4d34e",
+          "parameters": {},
+          "segmentName": "VMCreationFailure_ResultCode"
+        },
+        {
+          "segmentId": "8db0483b-deb4-4c9c-ad85-2972243defbf",
+          "parameters": {},
+          "segmentName": "GoalSeeking_Exception_/hr"
+        },
+        {
+          "segmentId": "08015d2c-0aae-4486-8455-a703e1610547",
+          "parameters": {},
+          "segmentName": "GoalSeeking_Exceptions"
+        }
+      ],
+      "groupId": null
+    }
+  ],
+  "shareType": "shared",
+  "eTag": ""
+}

@@ -1,0 +1,11 @@
+C:\Users\v-vasub\Documents\KQLParam\bin\Debug\netcoreapp3.0\KQLParam.exe
+C:\Users\v-vasub\Documents\KQLParam\bin\Debug\netcoreapp3.0\KQLParam.deps.json
+C:\Users\v-vasub\Documents\KQLParam\bin\Debug\netcoreapp3.0\KQLParam.runtimeconfig.json
+C:\Users\v-vasub\Documents\KQLParam\bin\Debug\netcoreapp3.0\KQLParam.runtimeconfig.dev.json
+C:\Users\v-vasub\Documents\KQLParam\bin\Debug\netcoreapp3.0\KQLParam.dll
+C:\Users\v-vasub\Documents\KQLParam\bin\Debug\netcoreapp3.0\KQLParam.pdb
+C:\Users\v-vasub\Documents\KQLParam\obj\Debug\netcoreapp3.0\KQLParam.csprojAssemblyReference.cache
+C:\Users\v-vasub\Documents\KQLParam\obj\Debug\netcoreapp3.0\KQLParam.AssemblyInfoInputs.cache
+C:\Users\v-vasub\Documents\KQLParam\obj\Debug\netcoreapp3.0\KQLParam.AssemblyInfo.cs
+C:\Users\v-vasub\Documents\KQLParam\obj\Debug\netcoreapp3.0\KQLParam.dll
+C:\Users\v-vasub\Documents\KQLParam\obj\Debug\netcoreapp3.0\KQLParam.pdb

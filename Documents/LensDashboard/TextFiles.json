@@ -1,0 +1,198 @@
+{
+  "id": "f9fb8c7e14bd432ca878b96b85d26728",
+  "name": "TextFiles",
+  "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+  "provider": "Dso",
+  "scenario": "",
+  "description": "",
+  "tags": "",
+  "config": {
+    "jobName": "f9fb8c7e14bd432ca878b96b85d26728",
+    "jobDisplayName": "TextFiles",
+    "jobDescription": "",
+    "tags": "",
+    "maxJobInstances": 1,
+    "isDebug": false,
+    "appendUtcIndicator": false,
+    "allocationType": 0,
+    "jobScheduleSettings": {
+      "scheduleType": "Frequency",
+      "frequencySettings": {
+        "cronSchedule": "0 23 18 */1 * *",
+        "backFill": false,
+        "monthly": false
+      }
+    },
+    "defaultICMAlerts": false,
+    "activities": [
+      {
+        "activityDisplayName": "TextFiles",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "34ae3ccb-f3c9-4caf-8118-e42e5934c341",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxrecords=20000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(Search:string,FileName:string,Cluster:string,Database:string)[];\r\nunion isfuzzy=true view,(\r\n    database(\"db\").['TextFileLogs']\r\n    | distinct FileName\r\n    | order by FileName asc \r\n    | extend Search=\"Show in Search\",Cluster='{cluster}', Database='{database}'\r\n    | project Search,FileName,Cluster,Database\r\n)\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Output_TextFile"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      }
+    ],
+    "project": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342",
+    "context": {
+      "uiCron": {
+        "freq": "day",
+        "rate": 1,
+        "value": "0 23 18 */1 * *",
+        "isEntered": false,
+        "hourMins": 3,
+        "minuteSecs": 3,
+        "time": "2019-10-02T01:23:26.523Z",
+        "weekDays": [
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "monthDay": 1
+      },
+      "lensScenario": null,
+      "lensCreatedBy": "v-vasub",
+      "lensCreatedDate": "2019-10-01T18:28:31.1265204Z",
+      "lensModifiedBy": "v-vasub",
+      "lensModifiedDate": "2019-10-01T19:17:47.3819474Z"
+    },
+    "failureWebhook": {
+      "url": "https://lens.msftcloudes.com/share/jobnotificationemail",
+      "aadResource": "aa0c39bf-5086-4900-bf89-6404bff62cf8",
+      "aadTenant": "microsoft.onmicrosoft.com"
+    }
+  },
+  "createdBy": "v-vasub",
+  "createdDate": "2019-10-01T18:28:31.1265204Z",
+  "nextExecutionDate": "2019-10-03T18:23:00Z",
+  "modifiedBy": "v-vasub",
+  "modifiedDate": "2019-10-01T19:17:47.3819474Z",
+  "version": "2",
+  "isEnabled": true,
+  "isQuarantined": false,
+  "instances": [
+    {
+      "id": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342|f9fb8c7e14bd432ca878b96b85d26728|T|2019-10-02T18:23:00.0000000Z",
+      "jobId": "f9fb8c7e14bd432ca878b96b85d26728",
+      "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+      "status": "Succeeded",
+      "jobStatus": "0",
+      "errorMsg": null,
+      "createdDate": "2019-10-02T18:23:00Z",
+      "startTime": "2019-10-02T18:23:00Z",
+      "endTime": "2019-10-02T18:23:15Z",
+      "elapsedTime": "2019-10-03T00:00:14.6902149Z",
+      "seed": "2019-10-01T18:23:00Z",
+      "logLink": "https://analytics.applicationinsights.io/subscriptions/56dcf710-f955-442e-8ac2-3b90ab65dea1/resourcegroups/datastudioorchestrator/components/datastudiojobs?q=H4sIAAAAAAAEAFWQQU%2fDMAyF70j8B9%2fWahlKCwU2qVxAQkiMC9XEDYXEgkxtGpIUVmk%2fHmddN3ZK7Oe85y%2bd0a2BxOF3hz74lEGi0KJRaKTGXR2ckOhhC7gJJIDCIHTtoQTVG9FomZiurtP4FDcSbSDHOG5du0YZIOiGrEVjGbQWnYj6%2b5NiQI%2bRXLQx6JrWh6q3yICGvfg8EZZDi43R6fnZFn6%2f0OGJI5QlTN7ur6dXq8fluvLlBATte8iHO1pZBIyNJOfZfJbxGc%2br7HaRXy44vyhusnxeFFPOqdqFjAzVyED7HvwYvOIPOh36Zzprkvz%2fmsHLABg5GewhaGpPyODh%2bJPDLXK1TqGDjx6OmQq9%2fAOPnAeVqQEAAA%3d%3d&apptype=web",
+      "elapsedMilliseconds": 14690,
+      "parameters": {
+        "startDateTime": "2019-10-01T18:23:00Z",
+        "endDateTime": "2019-10-02T18:23:00Z"
+      },
+      "segments": [
+        {
+          "segmentId": "34ae3ccb-f3c9-4caf-8118-e42e5934c341",
+          "startTime": "2019-10-02T18:23:00.6650416Z",
+          "endTime": "2019-10-02T18:23:15.2459003Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "TextFiles"
+        }
+      ],
+      "groupId": null
+    },
+    {
+      "id": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342|f9fb8c7e14bd432ca878b96b85d26728|M|2019-10-01T19:18:04.5743278Z",
+      "jobId": "f9fb8c7e14bd432ca878b96b85d26728",
+      "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+      "status": "Succeeded",
+      "jobStatus": "0",
+      "errorMsg": null,
+      "createdDate": "2019-10-01T19:18:04Z",
+      "startTime": "2019-10-01T19:18:04Z",
+      "endTime": "2019-10-01T19:18:25Z",
+      "elapsedTime": "2019-10-03T00:00:20.7248154Z",
+      "seed": "2019-09-30T18:23:00Z",
+      "logLink": "https://analytics.applicationinsights.io/subscriptions/56dcf710-f955-442e-8ac2-3b90ab65dea1/resourcegroups/datastudioorchestrator/components/datastudiojobs?q=H4sIAAAAAAAEAFWQMU%2fDMBCFdyT%2bw21NhIvstqhppDCxgICFwIqMfaJGiWNsBxqpP55z27R0su%2fe%2bb373FvTWcg8fvcYYsgZZBodWo1WGdzV0UuFAbaAm0gCaIzSNAEq0IOVrVGZ7ZsmT09xo9BFckzjzndfqCJE05K1bB2DzqGXSX%2b%2f1wzoMZKLsRZ924VYDw4Z0HCQn2fC077Fxuj88mILv2v0eOYIVQWTt%2fAw132xFvhaTUDSvsd8uKWVZcTUyGZcrKaCT7moxaoURckX1zfLxXy2LK44LznfhYwM9chA%2bx79GLzgD3oTh0c6G5LC%2f5rB8x4wcTI4QNDUgZDB3ekn97fE1XmNHj4GOGVqDOoPBySG16kBAAA%3d&apptype=web",
+      "elapsedMilliseconds": 20724,
+      "parameters": {
+        "startDateTime": "2019-09-30T18:23:00Z",
+        "endDateTime": "2019-10-01T18:23:00Z"
+      },
+      "segments": [
+        {
+          "segmentId": "34ae3ccb-f3c9-4caf-8118-e42e5934c341",
+          "startTime": "2019-10-01T19:18:04.6211945Z",
+          "endTime": "2019-10-01T19:18:21.711565Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "TextFiles"
+        }
+      ],
+      "groupId": null
+    },
+    {
+      "id": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342|f9fb8c7e14bd432ca878b96b85d26728|M|2019-10-01T19:16:15.0445310Z",
+      "jobId": "f9fb8c7e14bd432ca878b96b85d26728",
+      "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+      "status": "Failed",
+      "jobStatus": "5",
+      "errorMsg": "{\"exceptionMessage\":\"Forbidden (403-Forbidden): Forbidden: Caller is not authorized to perform this action\\r\\nPrincipal 'aadapp=63a82f84-4e3d-49ae-bbbc-8ef7bef5b612;72f988bf-86f1-41af-91ab-2d7cd011db47' is not authorized to perform operation 'ClusterMonitoringShowCommand' on 'https://masvaas.kusto.windows.net:443/'.\\r\\nPlease provide the following information when contacting the Kusto team:\\r\\nClientRequestId='FgmEU963YcE=.2', ActivityId='5ad94ff7-db27-4468-aee5-45d0058ee20f', Timestamp='2019-10-01T19:16:15.3006516Z'.. This normally represents a permanent error, and retrying is unlikely to help.\\r\\nPlease provide the following information when contacting the Kusto team @ https://aka.ms/kustosupport :\\r\\nDataSource='https://masvaas.kusto.windows.net/v1/rest/mgmt',\\r\\nDatabaseName='TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33',\\r\\nClientRequestId='FgmEU963YcE=.2',\\r\\nActivityId='5ad94ff7-db27-4468-aee5-45d0058ee20f,\\r\\nTimestamp='2019-10-01T19:16:15.3081679Z'.\",\"exceptionType\":\"Orchestrator.Exceptions.ActivityFailureException\",\"stackTrace\":\"   at FrontEnd.WorkerPools.WorkerPoolManager.<RunInstanceAsync>d__12.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\WorkerPools\\\\WorkerPoolManager.cs:line 451\\r\\n   at FrontEnd.WorkerPools.WorkerPoolManager.<RunAsync>d__10.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\WorkerPools\\\\WorkerPoolManager.cs:line 126\",\"innerException\":{\"exceptionMessage\":\"Forbidden (403-Forbidden): Forbidden: Caller is not authorized to perform this action\\r\\nPrincipal 'aadapp=63a82f84-4e3d-49ae-bbbc-8ef7bef5b612;72f988bf-86f1-41af-91ab-2d7cd011db47' is not authorized to perform operation 'ClusterMonitoringShowCommand' on 'https://masvaas.kusto.windows.net:443/'.\\r\\nPlease provide the following information when contacting the Kusto team:\\r\\nClientRequestId='FgmEU963YcE=.2', ActivityId='5ad94ff7-db27-4468-aee5-45d0058ee20f', Timestamp='2019-10-01T19:16:15.3006516Z'.. This normally represents a permanent error, and retrying is unlikely to help.\\r\\nPlease provide the following information when contacting the Kusto team @ https://aka.ms/kustosupport :\\r\\nDataSource='https://masvaas.kusto.windows.net/v1/rest/mgmt',\\r\\nDatabaseName='TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33',\\r\\nClientRequestId='FgmEU963YcE=.2',\\r\\nActivityId='5ad94ff7-db27-4468-aee5-45d0058ee20f,\\r\\nTimestamp='2019-10-01T19:16:15.3081679Z'.\",\"exceptionType\":\"Orchestrator.Exceptions.OrchestratorException\",\"stackTrace\":\"   at FrontEnd.Clients.WorkerPoolClient.ThrowWorkerException(HttpStatusCode statusCode, String contextName, ExceptionResponse exceptionResponse) in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\Clients\\\\WorkerPoolClient.cs:line 90\\r\\n   at FrontEnd.Clients.WorkerPoolClient.<GetOperationStatusAsync>d__9.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\Clients\\\\WorkerPoolClient.cs:line 277\\r\\n   at FrontEnd.WorkerPools.WorkerPoolManager.<WaitForOperationToCompleteAsync>d__14.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\WorkerPools\\\\WorkerPoolManager.cs:line 527\\r\\n   at FrontEnd.WorkerPools.WorkerPoolManager.<RunInstanceAsync>d__12.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\WorkerPools\\\\WorkerPoolManager.cs:line 372\",\"innerException\":{\"exceptionMessage\":\"Forbidden (403-Forbidden): Forbidden: Caller is not authorized to perform this action\\r\\nPrincipal 'aadapp=63a82f84-4e3d-49ae-bbbc-8ef7bef5b612;72f988bf-86f1-41af-91ab-2d7cd011db47' is not authorized to perform operation 'ClusterMonitoringShowCommand' on 'https://masvaas.kusto.windows.net:443/'.\\r\\nPlease provide the following information when contacting the Kusto team:\\r\\nClientRequestId='FgmEU963YcE=.2', ActivityId='5ad94ff7-db27-4468-aee5-45d0058ee20f', Timestamp='2019-10-01T19:16:15.3006516Z'.. This normally represents a permanent error, and retrying is unlikely to help.\\r\\nPlease provide the following information when contacting the Kusto team @ https://aka.ms/kustosupport :\\r\\nDataSource='https://masvaas.kusto.windows.net/v1/rest/mgmt',\\r\\nDatabaseName='TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33',\\r\\nClientRequestId='FgmEU963YcE=.2',\\r\\nActivityId='5ad94ff7-db27-4468-aee5-45d0058ee20f,\\r\\nTimestamp='2019-10-01T19:16:15.3081679Z'.\",\"exceptionType\":\"Kusto.Data.Exceptions.KustoRequestDeniedException\",\"stackTrace\":\"   at Kusto.Data.Net.Client.RestClient2.<ThrowKustoExceptionFromResponseMessageAsync>d__45.MoveNext()\\r\\n   at Kusto.Data.Net.Client.RestClient2.<MakeHttpRequestAsyncImpl>d__41.MoveNext()\\r\\n   at Kusto.Cloud.Platform.Utils.MonitoredActivity.<InvokeAsync>d__15`2.MoveNext()\\r\\n   at Kusto.Cloud.Platform.Utils.MonitoredActivity.<InvokeAsync>d__15`2.MoveNext()\\r\\n   at Kusto.Data.Net.Client.RestClient2.<MakeHttpRequestAsync>d__39.MoveNext()\\r\\n   at Kusto.Data.Net.Client.RestClient2.<ExecuteControlCommandAsync>d__35.MoveNext()\\r\\n   at Shared.Clients.KustoClient.<ExecuteControlCommandAsync>d__55.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Clients\\\\KustoClient.cs:line 831\\r\\n   at Shared.Clients.KustoClient.<>c__DisplayClass36_0.<<ExecuteCommandAsync>b__0>d.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Clients\\\\KustoClient.cs:line 417\\r\\n   at Shared.Utilities.RetryUtility.<RetryAsync>d__14`2.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Utilities\\\\RetryUtility.cs:line 394\\r\\n   at Shared.Utilities.RetryUtility.<RetryAsync>d__3`1.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Utilities\\\\RetryUtility.cs:line 0\\r\\n   at Shared.Clients.KustoClient.<ExecuteCommandAsync>d__36.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Clients\\\\KustoClient.cs:line 417\\r\\n   at Worker.WorkerPools.DataStudioMovementWorkerPool.<CopyTableAsync>d__28.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Worker\\\\WorkerPools\\\\DataStudioMovementWorkerPool.cs:line 1497\\r\\n   at Worker.WorkerPools.DataStudioMovementWorkerPool.<RunActivityKustoToKustoAsync>d__27.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Worker\\\\WorkerPools\\\\DataStudioMovementWorkerPool.cs:line 1407\\r\\n   at Worker.WorkerPools.DataStudioMovementWorkerPool.<RunActivityAsync>d__21.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Worker\\\\WorkerPools\\\\DataStudioMovementWorkerPool.cs:line 1204\\r\\n   at Worker.Controllers.JobActivityController.<>c__DisplayClass10_0.<<RunActivityAsync>b__0>d.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Worker\\\\Controllers\\\\JobActivityController.cs:line 350\"}}}",
+      "createdDate": "2019-10-01T19:16:15Z",
+      "startTime": "2019-10-01T19:16:15Z",
+      "endTime": "2019-10-01T19:16:18Z",
+      "elapsedTime": "2019-10-03T00:00:03.3842106Z",
+      "seed": "2019-09-30T18:23:00Z",
+      "logLink": "https://analytics.applicationinsights.io/subscriptions/56dcf710-f955-442e-8ac2-3b90ab65dea1/resourcegroups/datastudioorchestrator/components/datastudiojobs?q=H4sIAAAAAAAEAFWQzU7DMBCE70i8w96aCBfZ9EdKpHCiSEjAhXDghIy9KkaJY2wHGqkPz7ptWnqyd2c9s597azoLmcfvHkMMOYNMo0Or0SqDuzp6qTDAFnATSQCNUZomQAV6sLI1KrN90%2bTpKW4UukiOadz57gtVhGhaspatY9A59DLp7w%2baAT1GcjHWom%2b7EOvBIQMaDnJ9JjztW2yMzi8vtvD7iR7PHKGqYHK%2fblevxXL2plbVBCTte8yHW1pZRkyN7IaLYir4lItaFKVYlmJxzefzxUzwK85LznchI0M9MtC%2bRz8GL%2fiD3sThkc6GpPC%2fZvC8B0ycDA4QNHUgZHB3%2bsn9LXF1XqOHjwFOmRqD%2bgOK7ApYqQEAAA%3d%3d&apptype=web",
+      "elapsedMilliseconds": 3384,
+      "parameters": {
+        "startDateTime": "2019-09-30T18:23:00Z",
+        "endDateTime": "2019-10-01T18:23:00Z"
+      },
+      "segments": [
+        {
+          "segmentId": "34ae3ccb-f3c9-4caf-8118-e42e5934c341",
+          "startTime": "2019-10-01T19:16:15.1089337Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "TextFiles"
+        }
+      ],
+      "groupId": null
+    }
+  ],
+  "shareType": "shared",
+  "eTag": ""
+}

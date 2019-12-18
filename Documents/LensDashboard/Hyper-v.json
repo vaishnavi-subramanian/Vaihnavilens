@@ -1,0 +1,247 @@
+{
+  "id": "ac0db28c56d04d3d960cb05120e60c95",
+  "name": "Hyper-V",
+  "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+  "provider": "Dso",
+  "scenario": "",
+  "description": "",
+  "tags": "",
+  "config": {
+    "jobName": "ac0db28c56d04d3d960cb05120e60c95",
+    "jobDisplayName": "Hyper-V",
+    "jobDescription": "",
+    "tags": "",
+    "maxJobInstances": 1,
+    "isDebug": false,
+    "appendUtcIndicator": false,
+    "allocationType": 0,
+    "jobScheduleSettings": {
+      "scheduleType": "Frequency",
+      "frequencySettings": {
+        "cronSchedule": "0 13 18 */1 * *",
+        "backFill": false,
+        "monthly": false
+      }
+    },
+    "defaultICMAlerts": false,
+    "activities": [
+      {
+        "activityDisplayName": "HyperV - VM Instance Impact By EventType",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-IBU-TestPass-MAS_Prod_1.1906.0.30-20190719100019-2112bf77-eb21-4fd6-8883-a5274eedc5d2"
+          }
+        ],
+        "id": "e8380561-c6c3-4f2b-b516-dca4b99d93e4",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet schema=datatable(OccurrenceTime:datetime,MachineName:string,LogName:string,ProviderName:string,EventId:int,RecordId:int64,Level:int,Description:string,EventType:string,Properties:string)[];\r\nunion isfuzzy=true schema,(\r\n    database('db').['WindowsEventLogs']\r\n    | where \r\n        (EventId==41 and ProviderName==\"Microsoft-Windows-Kernel-Power\") \r\n        or (EventId==1001 and ProviderName==\"Microsoft-Windows-WER-SystemErrorReporting\") \r\n        or (EventId==6008 and ProviderName==@\"EventLog\") \r\n        or (EventId==12050 and ProviderName startswith @\"Microsoft-Windows-Hyper-V\") \r\n        or (EventId==12320 and ProviderName startswith @\"Microsoft-Windows-Hyper-V\") \r\n        or (EventId==12630 and ProviderName startswith @\"Microsoft-Windows-Hyper-V\") \r\n        or (EventId==18502 and ProviderName startswith @\"Microsoft-Windows-Hyper-V\") \r\n        or (EventId==18524 and ProviderName startswith @\"Microsoft-Windows-Hyper-V\") \r\n        or (EventId==18590 and ProviderName startswith @\"Microsoft-Windows-Hyper-V\") \r\n        or (EventId==24004 and ProviderName startswith @\"Microsoft-Windows-Hyper-V\") \r\n        or (EventId==21024 and ProviderName startswith @\"Microsoft-Windows-Hyper-V\") \r\n        or (EventId==21026 and ProviderName startswith @\"Microsoft-Windows-Hyper-V\") \r\n        or (EventId==20417 and ProviderName startswith @\"Microsoft-Windows-Hyper-V\") \r\n    | distinct MachineName,LogName,ProviderName,EventId,RecordId,Level,OccurrenceTime,Description,tostring(Properties)\r\n    | extend EventType = case(EventId==41,  \"Dirty Shutdown\",\r\n                          EventId==1001,\"Bugcheck\",\r\n                          EventId==6008,\"Unexpected Shutdown\",\r\n                          EventId==12050,\"Hyper-V Restore Failed\",\r\n                          EventId==12320,\"Hyper-V Serial port open error\",\r\n                          EventId==12630,\"Hyper-V VHD resiliency failed\",\r\n                          EventId==18502,\"Hyper-V Turned off\",\r\n                          EventId==18524,\"Hyper-V Paused for critical error\",\r\n                          EventId==18590,\"Hyper-V Critical error in OS\",\r\n                          EventId==24004,\"Hyper-V Processor-specific features not supported\",\r\n                          EventId==21024,\"Hyper-V Migration failure at source\",\r\n                          EventId==21026,\"Hyper-V Migration Failure at destination\",\r\n                          EventId==20417,\"Hyper-V Migration Long Blackout at destination\",\r\n                          \"Unknown\")\r\n)\r\n| summarize count_=count() by tostring(EventType),EventId"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "HyperV - VM Instance Impact By EventType"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "HyperV - VM Instance Impact Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-IBU-TestPass-MAS_Prod_1.1906.0.30-20190719100019-2112bf77-eb21-4fd6-8883-a5274eedc5d2"
+          }
+        ],
+        "id": "dc02fc02-a933-4734-8752-9069bf60de90",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet schema=datatable(OccurrenceTime:datetime,MachineName:string,LogName:string,ProviderName:string,EventId:int,RecordId:int64,Level:int,Description:string,EventType:string,Properties:string)[];\r\nunion isfuzzy=true schema,(\r\n    database('db').['WindowsEventLogs']\r\n    | where \r\n        (EventId==41 and ProviderName==\"Microsoft-Windows-Kernel-Power\") \r\n        or (EventId==1001 and ProviderName==\"Microsoft-Windows-WER-SystemErrorReporting\") \r\n        or (EventId==6008 and ProviderName==@\"EventLog\") \r\n        or (EventId==12050 and ProviderName startswith @\"Microsoft-Windows-Hyper-V\") \r\n        or (EventId==12320 and ProviderName startswith @\"Microsoft-Windows-Hyper-V\") \r\n        or (EventId==12630 and ProviderName startswith @\"Microsoft-Windows-Hyper-V\") \r\n        or (EventId==18524 and ProviderName startswith @\"Microsoft-Windows-Hyper-V\") \r\n        or (EventId==18590 and ProviderName startswith @\"Microsoft-Windows-Hyper-V\") \r\n        or (EventId==24004 and ProviderName startswith @\"Microsoft-Windows-Hyper-V\") \r\n        or (EventId==21024 and ProviderName startswith @\"Microsoft-Windows-Hyper-V\") \r\n        or (EventId==21026 and ProviderName startswith @\"Microsoft-Windows-Hyper-V\") \r\n        or (EventId==20417 and ProviderName startswith @\"Microsoft-Windows-Hyper-V\") \r\n    | distinct MachineName,LogName,ProviderName,EventId,RecordId,Level,OccurrenceTime,Description,tostring(Properties)\r\n    | extend EventType = case(EventId==41,  \"Dirty Shutdown\",\r\n                          EventId==1001,\"Bugcheck\",\r\n                          EventId==6008,\"Unexpected Shutdown\",\r\n                          EventId==12050,\"Hyper-V Restore Failed\",\r\n                          EventId==12598,\"Hyper-V Disconnected from virtual network\",\r\n                          EventId==12320,\"Hyper-V Serial port open error\",\r\n                          EventId==12630,\"Hyper-V VHD resiliency failed\",\r\n                          EventId==18502,\"Hyper-V Turned off\",\r\n                          EventId==18524,\"Hyper-V Paused for critical error\",\r\n                          EventId==18590,\"Hyper-V Critical error in OS\",\r\n                          EventId==24004,\"Hyper-V Processor-specific features not supported\",\r\n                          EventId==21024,\"Hyper-V Migration failure at source\",\r\n                          EventId==21026,\"Hyper-V Migration Failure at destination\",\r\n                          EventId==20417,\"Hyper-V Migration Failure at destination\",\r\n                          \"Unknown\")\r\n)\r\n| summarize count_=count() by bin(OccurrenceTime, time(1h)),tostring(EventType) | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "HyperV - VM Instance Impact Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Hyper-V - Migration Success Rate",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-IBU-TestPass-MAS_Prod_1.1906.0.30-20190719100019-2112bf77-eb21-4fd6-8883-a5274eedc5d2"
+          }
+        ],
+        "id": "ebf1a3b6-ca92-4a0e-ad81-eaf6d66a8945",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxsize=128000000;let schema=datatable(OccurrenceTime:datetime,MachineName:string,EventId:int,RecordId:long,EventType:string,Properties:dynamic,VmName:string,VmID:string,HostName:string,Succeeded:bool,Failed:bool,Status:string)[];\r\nlet vmMigrationStart = (e:int) {e in (20413, 20414)};\r\nlet vmMigrationSuccess = (e:int) {e in (20415, 20416, 20417, 20418, 20419)};\r\nlet vmMigrationFault = (e:int) {e in (21024, 21025, 21026)};\r\nunion isfuzzy=true schema,(\r\n    find withsource=sourceTable in (cluster('{cluster}')\r\n        .database('{database}')\r\n        .['WindowsEventLogs'])\r\n    where LogName startswith \"Microsoft-Windows-Hyper-V\"\r\n    and (vmMigrationStart(EventId) or vmMigrationSuccess(EventId) or vmMigrationFault(EventId))\r\n    | distinct sourceTable,OccurrenceTime,MachineName,EventId,RecordId,Description,tostring(Properties)\r\n    | extend Database = extract(\"database\\\\(\\\\\\\"([\\\\w-.]*)\\\\\\\"\\\\)\",1,sourceTable),Cluster='masvaas'\r\n    | extend Properties=todynamic(Properties)\r\n    | extend EventType = case(EventId==20413,  \"MSVM_VMMS_MIGRATION_START_ONLINE\",\r\n                            EventId==20414,\"MSVM_VMMS_MIGRATION_START_OFFLINE\",\r\n                            EventId==20415,\"MSVM_VMMS_MIGRATION_END_ONLINE_SOURCE\",\r\n                            EventId==20416,\"MSVM_VMMS_MIGRATION_END_OFFLINE_SOURCE\",\r\n                            EventId==20417,\"MSVM_VMMS_MIGRATION_END_ONLINE_LONG_BLACKOUT_SOURCE\",\r\n                            EventId==20418 ,\"MSVM_VMMS_MIGRATION_END_ONLINE_DESTINATION\",\r\n                            EventId==20419 ,\"MSVM_VMMS_MIGRATION_END_OFFLINE_DESTINATION\",\r\n                            EventId==21024,\"MSVM_VMMS_MIGRATION_FAILURE_AT_SOURCE_ERROR\",\r\n                            EventId==21025,\"MSVM_VMMS_MIGRATION_FAILURE_AT_SOURCE_ERROR_SUMMARY\",\r\n                            EventId==21026,\"MSVM_VMMS_MIGRATION_FAILURE_AT_DESTINATION_ERROR\",\r\n                            \"Unknown\")\r\n    | where not(isempty(MachineName) or (MachineName startswith  \"v-Host\"))\r\n    | extend VmName=tostring(Properties[0]),VmID=tostring(Properties[1]),HostName=tostring(Properties[2])\r\n    | extend Succeeded=vmMigrationSuccess(EventId),Failed=vmMigrationFault(EventId)\r\n    | extend Status=case(Succeeded, \"Succeeded\", Failed, \"Failed\", \"\") \r\n    | where notempty(Status)\r\n)"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Hyper-V - Migration Success Rate"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Hyper-V - Migration Count By EventType",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-IBU-TestPass-MAS_Prod_1.1906.0.30-20190719100019-2112bf77-eb21-4fd6-8883-a5274eedc5d2"
+          }
+        ],
+        "id": "7ddfdff1-6aa1-406b-ab23-8723476a6ad8",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nlet schema=datatable(OccurrenceTime:datetime,MachineName:string,EventId:int,RecordId:long,EventType:string,Properties:dynamic,VmName:string,VmID:string,HostName:string,Status:string)[];\r\nlet vmMigrationStart = (e:int) {e in (20413, 20414)};\r\nlet vmMigrationSuccess = (e:int) {e in (20415, 20416, 20417, 20418, 20419)};\r\nlet vmMigrationFault = (e:int) {e in (21024, 21025, 21026)};\r\nunion isfuzzy=true schema,(\r\n    find withsource=sourceTable in (cluster('{cluster}')\r\n        .database('{database}')\r\n        .['WindowsEventLogs'])\r\n    where LogName startswith \"Microsoft-Windows-Hyper-V\"\r\n    and (vmMigrationStart(EventId) or vmMigrationSuccess(EventId) or vmMigrationFault(EventId))\r\n    | distinct sourceTable,OccurrenceTime,MachineName,EventId,RecordId,Description,tostring(Properties)\r\n    | extend Database = extract(\"database\\\\(\\\\\\\"([\\\\w-.]*)\\\\\\\"\\\\)\",1,sourceTable),Cluster='masvaas'\r\n    | extend Properties=todynamic(Properties)\r\n    | extend EventType = case(EventId==20413,  \"MSVM_VMMS_MIGRATION_START_ONLINE\",\r\n                            EventId==20414,\"MSVM_VMMS_MIGRATION_START_OFFLINE\",\r\n                            EventId==20415,\"MSVM_VMMS_MIGRATION_END_ONLINE_SOURCE\",\r\n                            EventId==20416,\"MSVM_VMMS_MIGRATION_END_OFFLINE_SOURCE\",\r\n                            EventId==20417,\"MSVM_VMMS_MIGRATION_END_ONLINE_LONG_BLACKOUT_SOURCE\",\r\n                            EventId==20418 ,\"MSVM_VMMS_MIGRATION_END_ONLINE_DESTINATION\",\r\n                            EventId==20419 ,\"MSVM_VMMS_MIGRATION_END_OFFLINE_DESTINATION\",\r\n                            EventId==21024,\"MSVM_VMMS_MIGRATION_FAILURE_AT_SOURCE_ERROR\",\r\n                            EventId==21025,\"MSVM_VMMS_MIGRATION_FAILURE_AT_SOURCE_ERROR_SUMMARY\",\r\n                            EventId==21026,\"MSVM_VMMS_MIGRATION_FAILURE_AT_DESTINATION_ERROR\",\r\n                            \"Unknown\")\r\n    | where not(isempty(MachineName) or (MachineName startswith  \"v-Host\"))\r\n    | extend VmName=tostring(Properties[0]),VmID=tostring(Properties[1]),HostName=tostring(Properties[2])\r\n    | extend Succeeded=vmMigrationSuccess(EventId),Failed=vmMigrationFault(EventId)\r\n    | extend Status=case(Succeeded, \"Succeeded\", Failed, \"Failed\", \"\") \r\n    )\r\n| summarize count_=count() by tostring(EventType),EventId"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Hyper-V - Migration Count By EventType"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Hyper-V - Migration Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-IBU-TestPass-MAS_Prod_1.1906.0.30-20190719100019-2112bf77-eb21-4fd6-8883-a5274eedc5d2"
+          }
+        ],
+        "id": "e1095a33-c9b4-42f8-9746-6c4ce46da4f5",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxsize=128000000;let schema=datatable(OccurrenceTime:datetime,MachineName:string,EventId:int,RecordId:long,EventType:string,Properties:dynamic,VmName:string,VmID:string,HostName:string,Succeeded:bool,Failed:bool,Status:string)[];\r\nlet vmMigrationStart = (e:int) {e in (20413, 20414)};\r\nlet vmMigrationSuccess = (e:int) {e in (20415, 20416, 20417, 20418, 20419)};\r\nlet vmMigrationFault = (e:int) {e in (21024, 21025, 21026)};\r\nunion isfuzzy=true schema,(\r\n    find withsource=sourceTable in (cluster('{cluster}')\r\n        .database('TenantAvailabilityPNU-IBU-TestPass-MAS_Prod_1.1906.0.30-20190719100019-2112bf77-eb21-4fd6-8883-a5274eedc5d2')\r\n        .['WindowsEventLogs'])\r\n    where LogName startswith \"Microsoft-Windows-Hyper-V\"\r\n    and (vmMigrationStart(EventId) or vmMigrationSuccess(EventId) or vmMigrationFault(EventId))\r\n    | distinct sourceTable,OccurrenceTime,MachineName,EventId,RecordId,Description,tostring(Properties)\r\n    | extend Database = extract(\"database\\\\(\\\\\\\"([\\\\w-.]*)\\\\\\\"\\\\)\",1,sourceTable),Cluster='masvaas'\r\n    | extend Properties=todynamic(Properties)\r\n    | extend EventType = case(EventId==20413,  \"MSVM_VMMS_MIGRATION_START_ONLINE\",\r\n                            EventId==20414,\"MSVM_VMMS_MIGRATION_START_OFFLINE\",\r\n                            EventId==20415,\"MSVM_VMMS_MIGRATION_END_ONLINE_SOURCE\",\r\n                            EventId==20416,\"MSVM_VMMS_MIGRATION_END_OFFLINE_SOURCE\",\r\n                            EventId==20417,\"MSVM_VMMS_MIGRATION_END_ONLINE_LONG_BLACKOUT_SOURCE\",\r\n                            EventId==20418 ,\"MSVM_VMMS_MIGRATION_END_ONLINE_DESTINATION\",\r\n                            EventId==20419 ,\"MSVM_VMMS_MIGRATION_END_OFFLINE_DESTINATION\",\r\n                            EventId==21024,\"MSVM_VMMS_MIGRATION_FAILURE_AT_SOURCE_ERROR\",\r\n                            EventId==21025,\"MSVM_VMMS_MIGRATION_FAILURE_AT_SOURCE_ERROR_SUMMARY\",\r\n                            EventId==21026,\"MSVM_VMMS_MIGRATION_FAILURE_AT_DESTINATION_ERROR\",\r\n                            \"Unknown\")\r\n    | where not(isempty(MachineName) or (MachineName startswith  \"v-Host\"))\r\n    | extend VmName=tostring(Properties[0]),VmID=tostring(Properties[1]),HostName=tostring(Properties[2])\r\n    | extend Succeeded=vmMigrationSuccess(EventId),Failed=vmMigrationFault(EventId)\r\n    | extend Status=case(Succeeded, \"Succeeded\", Failed, \"Failed\", \"\") \r\n    | where notempty(Status)\r\n)\r\n | fork (top-nested 5 of Status by agg_Status=count() desc | limit 5000) (top-nested  of bin(OccurrenceTime, time(20m)) by count(),top-nested 5 of Status by count_=count() desc | sort by OccurrenceTime asc | project OccurrenceTime,Status,count_ | limit 5000) "
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Hyper-V - Migration Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Hyper-V - Migration Raw Event Logs",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-IBU-TestPass-MAS_Prod_1.1906.0.30-20190719100019-2112bf77-eb21-4fd6-8883-a5274eedc5d2"
+          }
+        ],
+        "id": "7048b49b-d2c7-4399-8577-c29b87cdcd23",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nlet schema=datatable(OccurrenceTime:datetime,MachineName:string,EventId:int,RecordId:long,EventType:string,Properties:dynamic,VmName:string,VmID:string,HostName:string,Status:string)[];\r\nlet vmMigrationSuccess = (e:int) {e in (20415, 20416, 20417, 20418, 20419)};\r\nlet vmMigrationFault = (e:int) {e in (21024, 21025, 21026)};\r\nunion isfuzzy=true schema,(\r\n    find withsource=sourceTable in (cluster('{cluster}')\r\n        .database('{database}')\r\n        .['WindowsEventLogs'])\r\n    where LogName startswith \"Microsoft-Windows-Hyper-V\"\r\n    and (vmMigrationSuccess(EventId) or vmMigrationFault(EventId))\r\n    | distinct sourceTable,OccurrenceTime,MachineName,EventId,RecordId,Description,tostring(Properties)\r\n    | extend Database = extract(\"database\\\\(\\\\\\\"([\\\\w-.]*)\\\\\\\"\\\\)\",1,sourceTable),Cluster='masvaas'\r\n    | extend Properties=todynamic(Properties)\r\n    | extend EventType = case(EventId==20415,\"MSVM_VMMS_MIGRATION_END_ONLINE_SOURCE\",\r\n                            EventId==20416,\"MSVM_VMMS_MIGRATION_END_OFFLINE_SOURCE\",\r\n                            EventId==20417,\"MSVM_VMMS_MIGRATION_END_ONLINE_LONG_BLACKOUT_SOURCE\",\r\n                            EventId==20418 ,\"MSVM_VMMS_MIGRATION_END_ONLINE_DESTINATION\",\r\n                            EventId==20419 ,\"MSVM_VMMS_MIGRATION_END_OFFLINE_DESTINATION\",\r\n                            EventId==21024,\"MSVM_VMMS_MIGRATION_FAILURE_AT_SOURCE_ERROR\",\r\n                            EventId==21025,\"MSVM_VMMS_MIGRATION_FAILURE_AT_SOURCE_ERROR_SUMMARY\",\r\n                            EventId==21026,\"MSVM_VMMS_MIGRATION_FAILURE_AT_DESTINATION_ERROR\",\r\n                            \"Unknown\")\r\n    | where not(isempty(MachineName))\r\n    | extend VmName=tostring(Properties[0]),VmID=tostring(Properties[1]),HostName=tostring(Properties[2])\r\n    | extend Succeeded=vmMigrationSuccess(EventId),Failed=vmMigrationFault(EventId)\r\n    | extend Status=case(Succeeded, \"Succeeded\", Failed, \"Failed\", \"\") \r\n    )\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Hyper-V - Migration Raw Event Logs"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      }
+    ],
+    "project": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342",
+    "context": {
+      "uiCron": {
+        "freq": "day",
+        "rate": 1,
+        "value": "0 13 18 */1 * *",
+        "isEntered": false,
+        "hourMins": 36,
+        "minuteSecs": 29,
+        "time": "2019-10-04T01:13:39.097Z",
+        "weekDays": [
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "monthDay": 1
+      },
+      "lensScenario": null,
+      "lensCreatedBy": "v-vasub",
+      "lensCreatedDate": "2019-10-03T18:18:38.1735457Z",
+      "lensModifiedBy": "v-vasub",
+      "lensModifiedDate": "2019-10-03T18:47:33.3900731Z"
+    },
+    "failureWebhook": {
+      "url": "https://lens.msftcloudes.com/share/jobnotificationemail",
+      "aadResource": "aa0c39bf-5086-4900-bf89-6404bff62cf8",
+      "aadTenant": "microsoft.onmicrosoft.com"
+    }
+  },
+  "createdBy": "v-vasub",
+  "createdDate": "2019-10-03T18:18:38.1735457Z",
+  "nextExecutionDate": "2019-10-04T18:13:00Z",
+  "modifiedBy": "v-vasub",
+  "modifiedDate": "2019-10-03T18:47:33.3900731Z",
+  "version": "8",
+  "isEnabled": true,
+  "isQuarantined": false,
+  "instances": [],
+  "shareType": "shared",
+  "eTag": ""
+}

@@ -1,0 +1,131 @@
+{
+  "id": "9638fe01a8a9410ea71055c91ba144b4",
+  "name": "TestAzureStack",
+  "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+  "provider": "Dso",
+  "scenario": "",
+  "description": "",
+  "tags": "",
+  "config": {
+    "jobName": "9638fe01a8a9410ea71055c91ba144b4",
+    "jobDisplayName": "TestAzureStack",
+    "jobDescription": "",
+    "tags": "",
+    "maxJobInstances": 1,
+    "isDebug": false,
+    "appendUtcIndicator": false,
+    "allocationType": 0,
+    "jobScheduleSettings": {
+      "scheduleType": "Frequency",
+      "frequencySettings": {
+        "cronSchedule": "0 43 16 */1 * *",
+        "backFill": false,
+        "monthly": false
+      }
+    },
+    "defaultICMAlerts": false,
+    "activities": [
+      {
+        "activityDisplayName": "Test Azure Stack - Test-AzureStack Health Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "8bf14f09-46ce-40f6-a7e2-1bb7ceca8646",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet searchTerm = \"AzureStack Cloud Validation Result:\";\r\nlet searchFileNameRegex = @\"AzureStack_Validation_Trace_([_\\d\\.]*)(.log|.LOG)\";\r\nlet timeExtractionRegex = @\"(\\d{4}).(\\d{2}).(\\d{2})_(\\d{2}).(\\d{2}).(\\d{2})\";\r\nlet replaceString = @\"\\1-\\2-\\3 \\4:\\5:\\6\";\r\nlet ExtractTimeFromFileName = (fileName:string){todatetime(replace(timeExtractionRegex,replaceString,extract(searchFileNameRegex,1,fileName)))};\r\nlet view = datatable(OccurrenceTime:datetime,Source:string,Healthy:long) [];\r\nunion isfuzzy=true view,(\r\n    database('db').['TextFileLogs']\r\n    | where FileName matches regex searchFileNameRegex\r\n    | where FileLineContent contains searchTerm\r\n    | distinct FileName,LineNumber,FileLineContent\r\n    | extend SummaryInfo=extract(@\"(\\d\\d\\/\\d\\d\\/\\d\\d\\d\\d \\d\\d:\\d\\d:\\d\\d) AzureStack Cloud Validation Result: (\\w*)\",2,FileLineContent)\r\n    | extend OccurrenceTime=ExtractTimeFromFileName(FileName)\r\n    | extend Healthy=tostring(SummaryInfo)==\"PASS\",Source=\"Test-AzureStack\"\r\n    | project OccurrenceTime,tolong(Healthy),Source\r\n)\r\n| project Healthy,OccurrenceTime,Source\r\n| sort by OccurrenceTime asc\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Test Azure Stack - Test-AzureStack Health Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Test Azure Stack - Instances",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "9e1c9577-5f46-4ba6-a8ad-acb4eb94e5b7",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view = datatable(OccurrenceTime:datetime,SummaryInfo:string,SummaryFile:string,LogFile:string)[];\r\nlet searchFileNameRegex = @\"AzureStack_Validation_(Summary|Trace)_([_\\d\\.]*)(.HTML|.html|.log|.LOG)\";\r\nlet timeExtractionRegex = @\"(\\d{4}).(\\d{2}).(\\d{2})_(\\d{2}).(\\d{2}).(\\d{2})\";\r\nlet searchTerm = \"AzureStack Cloud Validation Result:\";\r\nlet replaceString = @\"\\1-\\2-\\3 \\4:\\5:\\6\";\r\nlet ExtractTimeFromFileName = (fileName:string){todatetime(replace(timeExtractionRegex,replaceString,extract(searchFileNameRegex,2,fileName)))};\r\nunion isfuzzy=true view,(\r\n    database('db').TextFileLogs\r\n    | where FileName matches regex searchFileNameRegex\r\n    | extend SummaryInfo=extract(@\"(\\d\\d\\/\\d\\d\\/\\d\\d\\d\\d \\d\\d:\\d\\d:\\d\\d) AzureStack Cloud Validation Result: (\\w*)\",2,FileLineContent)\r\n    | extend HostCluster=extract(@\"([A-Z.]*) Azure Stack Cloud Hosting Infrastructure Summary\",1,FileLineContent)\r\n    | extend InfraVMs=extract(@\"([A-Z.]*) Azure Stack Infrastructure Role Instance Summary\",1,FileLineContent)\r\n    | extend InfraCapacity=extract(@\"([A-Z.]*) Azure Stack Infrastructure Capacity\",1,FileLineContent)\r\n    | extend InfraSFClusters=extract(@\"([A-Z.]*) Infrastructure management controller, Network controller, Storage services, and Privileged endpoint Infrastructure Roles\",1,FileLineContent)\r\n    | extend InfraSFApps=extract(@\"([A-Z.]*) Azure Stack Infrastructure Role summary\",1,FileLineContent)\r\n    | extend InfraSFServices=extract(@\"([A-Z.]*) Azure Stack Cloud Service Fabric Services\",1,FileLineContent)\r\n    | extend SQL=extract(@\"([A-Z.]*) Azure Stack Control Plane SQl Connection Summary\",1,FileLineContent)\r\n    | extend Endpoints=extract(@\"([A-Z.]*) Azure Stack Portal and API Summary\",1,FileLineContent)\r\n    | extend PhysicalDisks=extract(@\"([A-Z.]*) Azure Stack Storage Services Physical Disks Summary\",1,FileLineContent)\r\n    | distinct FileName,SummaryInfo,HostCluster,InfraVMs,InfraCapacity,InfraSFClusters,InfraSFApps,InfraSFServices,SQL,Endpoints,PhysicalDisks\r\n    | extend AzsLogCollectionFolder=extract(@\"(AzureStackLogs-\\d*)\",1,FileName)\r\n    | extend OccurrenceTime = ExtractTimeFromFileName(FileName)\r\n    | extend LogFileName=iff(FileName endswith \".log\",FileName,\"\"),SummaryFileName=iff(FileName endswith \".html\",FileName,\"\")\r\n    | summarize SummaryInfo=any(SummaryInfo),SummaryFile=any(SummaryFileName),LogFile=any(LogFileName),HostCluster=any(HostCluster),InfraVMs=any(InfraVMs),InfraCapacity=any(InfraCapacity),InfraSFClusters=any(InfraSFClusters),InfraSFApps=any(InfraSFApps),InfraSFServices=any(InfraSFServices),SQL=any(SQL),Endpoints=any(Endpoints),PhysicalDisks=any(PhysicalDisks) by OccurrenceTime,AzsLogCollectionFolder\r\n    | extend SummaryInfo=iff(SummaryInfo!~\"pass\", strcat(\"<strong style='background-color:yellow;color:red'>\",SummaryInfo,\"</strong>\"),strcat(\"<strong style='color:green;'>\",SummaryInfo,\"</strong>\"))\r\n    | order by OccurrenceTime desc\r\n)\r\n| extend Cluster='{cluster}', Database='{database}'"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Test Azure Stack - Instances"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      }
+    ],
+    "project": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342",
+    "context": {
+      "uiCron": {
+        "freq": "day",
+        "rate": 1,
+        "value": "0 43 16 */1 * *",
+        "isEntered": false,
+        "hourMins": 13,
+        "minuteSecs": 4,
+        "time": "2019-10-03T23:43:10.83Z",
+        "weekDays": [
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "monthDay": 1
+      },
+      "lensScenario": null,
+      "lensCreatedBy": "v-vasub",
+      "lensCreatedDate": "2019-10-03T16:46:03.6934494Z",
+      "lensModifiedBy": "v-vasub",
+      "lensModifiedDate": "2019-10-03T16:49:15.0390261Z"
+    },
+    "failureWebhook": {
+      "url": "https://lens.msftcloudes.com/share/jobnotificationemail",
+      "aadResource": "aa0c39bf-5086-4900-bf89-6404bff62cf8",
+      "aadTenant": "microsoft.onmicrosoft.com"
+    }
+  },
+  "createdBy": "v-vasub",
+  "createdDate": "2019-10-03T16:46:03.6934494Z",
+  "nextExecutionDate": "2019-10-04T16:43:00Z",
+  "modifiedBy": "v-vasub",
+  "modifiedDate": "2019-10-03T16:49:15.0390261Z",
+  "version": "2",
+  "isEnabled": true,
+  "isQuarantined": false,
+  "instances": [],
+  "shareType": "shared",
+  "eTag": ""
+}

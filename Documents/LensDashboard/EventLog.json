@@ -1,0 +1,199 @@
+{
+  "id": "d61fb814fd844a94b591a33abce0690b",
+  "name": "EventLog",
+  "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+  "provider": "Dso",
+  "scenario": "",
+  "description": "",
+  "tags": "",
+  "config": {
+    "jobName": "d61fb814fd844a94b591a33abce0690b",
+    "jobDisplayName": "EventLog",
+    "jobDescription": "",
+    "tags": "",
+    "maxJobInstances": 1,
+    "isDebug": false,
+    "appendUtcIndicator": false,
+    "allocationType": 0,
+    "jobScheduleSettings": {
+      "scheduleType": "Frequency",
+      "frequencySettings": {
+        "cronSchedule": "0 47 16 */1 * *",
+        "backFill": false,
+        "monthly": false
+      }
+    },
+    "defaultICMAlerts": false,
+    "activities": [
+      {
+        "activityDisplayName": "Eventlog_Output",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "674c4950-905d-4181-9b86-e0b745035cc0",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet schema=datatable(OccurrenceTime:datetime,MachineName:string,LogName:string,ProviderName:string,EventId:int,RecordId:int64,Level:int,Description:string,EventType:string,Properties:string)[];\r\nlet InterestingEventTable = materialize(datatable(ProviderName:string,EventId:int,EventType:string)\r\n[\r\n\"Application Popup\",                         26,    \"Application Crash notification\",\r\n\"Microsoft-Windows-Kernel-Power\",            41,    \"The system has rebooted without cleanly shutting down first\",\r\n\"LSI_SAS3i\",                                 129,   \"Bus Reset Issued\",\r\n\"Microsoft-Windows-StorageSpaces-Driver\",    303,   \"Drives hosting data for virtual disk have failed or are missing\",\r\n\"Microsoft-Windows-StorPort\",                500,   \"Storport timeout request for device\",\r\n\"Application Error\",                         1000,  \"Application Fault (with details)\",\r\n\"Microsoft-Windows-WER-SystemErrorReporting\",1001,  \"The computer has rebooted from bugcheck.\",\r\n\"Microsoft-Windows-StorageSpaces-Driver\",    1017,  \"Spaces waiting too long for lock\",\r\n\"Microsoft-Windows-StorageSpaces-Driver\",    1018,  \"Spaces taking too long to attach\",\r\n\".NET Runtime\",                              1025,  \".NET Process Termination - FailFast\",\r\n\".NET Runtime\",                              1026,  \".NET Process Termination\",\r\n\"Microsoft-Windows-Hyper-V-Worker\",          3488 , \"VM Failed to pause for critical error\",\r\n\"Microsoft-Windows-Hyper-V-Worker\",          3490  ,\"VM Failed to resume from critical error\",\r\n\"Microsoft-Windows-FailoverClustering\",      5120,  \"CSV Status IO Timeout\",\r\n\"Microsoft-Windows-FailoverClustering\",      9296,  \"CSV Auto Pause Error\",\r\n\"Microsoft-Windows-FailoverClustering\",      5142,  \"CSV Error Timeout\",\r\n\"EventLog\",                                  6008,  \"Unexpected Shutdown\",\r\n\"Microsoft-Windows-Hyper-V-Worker\",          12010, \"VM Failed to power on\",\r\n\"Microsoft-Windows-Hyper-V-Worker\",          12030, \"VM Failed to cold start\",\r\n\"Microsoft-Windows-Hyper-V-Worker\",          12050, \"VM Restore failed\",\r\n\"Microsoft-Windows-Hyper-V-Worker\",          12080, \"VM Restore failed with error\",\r\n\"Microsoft-Windows-Hyper-V-SynthStor\",       12630, \"VHD resiliency failed\",\r\n\"Microsoft-Windows-Hyper-V-Worker\",          18502, \"VM Turned off\",\r\n\"Microsoft-Windows-Hyper-V-Worker\",          18524, \"VM Paused for critical error\",\r\n\"Microsoft-Windows-Hyper-V-Worker\",          18590, \"VM encountered fatal error reported by guest OS\",\r\n\"Microsoft-Hyper-V-Chipset\",                 18600, \"VM encountered watchdog timeout and was reset\",\r\n\"Microsoft-Windows-Hyper-V-Worker\",          18602, \"VM encountered fatal error (with dump) reported by guest OS\",\r\n\"Microsoft-Windows-Hyper-V-VMMS-Admin\",      21024, \"VM Migration failed at source\",\r\n\"Microsoft-Windows-Hyper-V-VMMS-Admin\",      21026, \"VM Migration failed at destination\",\r\n\"Microsoft-Windows-Hyper-V-VMMS-Admin\",      24004, \"Hyper-V Processor-specific features not supported\",\r\n\"Microsoft-Windows-SMBClient\",               30804, \"SMB Network connection was disconnected\",\r\n\"Microsoft-Windows-SMBClient\",               30809, \"SMB Expired Exchange\",\r\n\"Microsoft-Windows-SMBClient\",               30823, \"SMB Hung Connection Failure\",\r\n\"Microsoft-Windows-Kernel-General\",          12,    \"OS Restart\",\r\n\"Microsoft-Windows-SMBServer\",              1011,   \"SMB RDMA Endpoint removed\",\r\n]);\r\nlet InterestingEventIDs = toscalar(InterestingEventTable | summarize makeset(EventId));\r\nlet InterestingProviders = toscalar(InterestingEventTable | summarize makeset(ProviderName));\r\nunion isfuzzy=true schema,(\r\n    find withsource=Source in (database('db').['WindowsEventLogs'])\r\n        where EventId in (InterestingEventIDs) and ProviderName in (InterestingProviders)\r\n        project OccurrenceTime,MachineName,LogName,ProviderName,EventId,RecordId,Level,Description,Properties\r\n    | distinct MachineName,LogName,ProviderName,EventId,RecordId,Level,OccurrenceTime,Description,tostring(Properties)\r\n    | join kind=inner (InterestingEventTable) on ProviderName,EventId\r\n    | project-away ProviderName1,EventId1\r\n)\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Eventlog_Output"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      }
+    ],
+    "project": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342",
+    "context": {
+      "uiCron": {
+        "freq": "day",
+        "rate": 1,
+        "value": "0 47 16 */1 * *",
+        "isEntered": false,
+        "hourMins": 5,
+        "minuteSecs": 54,
+        "time": "2019-10-01T23:47:06.81Z",
+        "weekDays": [
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "monthDay": 1
+      },
+      "lensScenario": null,
+      "lensCreatedBy": "v-vasub",
+      "lensCreatedDate": "2019-10-01T16:52:06.2114404Z",
+      "lensModifiedBy": "v-vasub",
+      "lensModifiedDate": "2019-10-01T20:00:53.1499903Z"
+    },
+    "failureWebhook": {
+      "url": "https://lens.msftcloudes.com/share/jobnotificationemail",
+      "aadResource": "aa0c39bf-5086-4900-bf89-6404bff62cf8",
+      "aadTenant": "microsoft.onmicrosoft.com"
+    }
+  },
+  "createdBy": "v-vasub",
+  "createdDate": "2019-10-01T16:52:06.2114404Z",
+  "nextExecutionDate": "2019-10-04T16:47:00Z",
+  "modifiedBy": "v-vasub",
+  "modifiedDate": "2019-10-01T20:00:53.1499903Z",
+  "version": "4",
+  "isEnabled": true,
+  "isQuarantined": false,
+  "instances": [
+    {
+      "id": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342|d61fb814fd844a94b591a33abce0690b|T|2019-10-03T16:47:00.0000000Z",
+      "jobId": "d61fb814fd844a94b591a33abce0690b",
+      "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+      "status": "Succeeded",
+      "jobStatus": "0",
+      "errorMsg": null,
+      "createdDate": "2019-10-03T16:47:00Z",
+      "startTime": "2019-10-03T16:47:00Z",
+      "endTime": "2019-10-03T16:47:31Z",
+      "elapsedTime": "2019-10-03T00:00:30.6517893Z",
+      "seed": "2019-10-02T16:47:00Z",
+      "logLink": "https://analytics.applicationinsights.io/subscriptions/56dcf710-f955-442e-8ac2-3b90ab65dea1/resourcegroups/datastudioorchestrator/components/datastudiojobs?q=H4sIAAAAAAAEAFWQQU%2fDMAyF70j8B9%2fWigylMIY6qZyQENIGB3qfQmJBUJuEJN1WaT8eZ103dkrs57znL53R1kDm8bfDEEPOIFPo0Cg0UuOhjl5IDLAH3EUSQGEUuglQgeqNaLXMTNc0eXqKO4kukmMad97%2boIwQdUvWonUMrEMvkr5%2bVQzoMZKLNgZ9a0Ose4cMaDiIrwthNbTYGJ1fX%2b1h%2b40eLxyhqmDSvmyL926pNm5VTUDQvqd8eKKVRcTUyO54UU4LPuX3dTFfzB4XnN%2fOOX8oy9kN51QdQkaGemSgfU9%2bDD5wg17HfklnQ1L4XzN4GwATJ4MjBE0dCRk8n39yuCUu6xV6%2bOzhnKkwyD8%2fCcWvqQEAAA%3d%3d&apptype=web",
+      "elapsedMilliseconds": 30651,
+      "parameters": {
+        "startDateTime": "2019-10-02T16:47:00Z",
+        "endDateTime": "2019-10-03T16:47:00Z"
+      },
+      "segments": [
+        {
+          "segmentId": "674c4950-905d-4181-9b86-e0b745035cc0",
+          "startTime": "2019-10-03T16:47:00.6318436Z",
+          "endTime": "2019-10-03T16:47:31.2367113Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Eventlog_Output"
+        }
+      ],
+      "groupId": null
+    },
+    {
+      "id": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342|d61fb814fd844a94b591a33abce0690b|T|2019-10-02T16:47:00.0000000Z",
+      "jobId": "d61fb814fd844a94b591a33abce0690b",
+      "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+      "status": "Succeeded",
+      "jobStatus": "0",
+      "errorMsg": null,
+      "createdDate": "2019-10-02T16:47:00Z",
+      "startTime": "2019-10-02T16:47:00Z",
+      "endTime": "2019-10-02T16:47:42Z",
+      "elapsedTime": "2019-10-03T00:00:41.4923569Z",
+      "seed": "2019-10-01T16:47:00Z",
+      "logLink": "https://analytics.applicationinsights.io/subscriptions/56dcf710-f955-442e-8ac2-3b90ab65dea1/resourcegroups/datastudioorchestrator/components/datastudiojobs?q=H4sIAAAAAAAEAFWQ0UvDMBDG3wX%2fh3tbi5mmY6t0UJ9UGDhBLL5KTE6NtGlMUl1hf7yXdd3cU3L3Xb7vfumMbg0kDr879MGnDBKFFo1CIzXu6uCERA9bwE0gARQGoWsPJajeiEbLxHR1ncanuJFoAznGcevaL5QBgm7IWjSWQWvRiai%2frhQDeozkoo1B17Q%2bVL1FBjTsxceJsB5abIxOz8%2b28PuJDk8coSxhcr9aXxUFvr%2fcPZUTELTvIR9uaGURMDaSGc%2bKacanfFZl%2bXJ%2bveT8cpFlizyfX3BO1S5kZKhGBtr34MfgGX%2fQ6dA%2f0FmT5P%2fXDB4HwMjJYA9BU3tCBrfHnxxukat1Ch289XDMVOjlHw%2bpzQqpAQAA&apptype=web",
+      "elapsedMilliseconds": 41492,
+      "parameters": {
+        "startDateTime": "2019-10-01T16:47:00Z",
+        "endDateTime": "2019-10-02T16:47:00Z"
+      },
+      "segments": [
+        {
+          "segmentId": "674c4950-905d-4181-9b86-e0b745035cc0",
+          "startTime": "2019-10-02T16:47:00.5584035Z",
+          "endTime": "2019-10-02T16:47:41.9885031Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Eventlog_Output"
+        }
+      ],
+      "groupId": null
+    },
+    {
+      "id": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342|d61fb814fd844a94b591a33abce0690b|M|2019-10-01T20:12:01.9253521Z",
+      "jobId": "d61fb814fd844a94b591a33abce0690b",
+      "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+      "status": "Succeeded",
+      "jobStatus": "0",
+      "errorMsg": null,
+      "createdDate": "2019-10-01T20:12:01Z",
+      "startTime": "2019-10-01T20:12:01Z",
+      "endTime": "2019-10-01T20:12:12Z",
+      "elapsedTime": "2019-10-03T00:00:10.49532Z",
+      "seed": "2019-09-30T16:47:00Z",
+      "logLink": "https://analytics.applicationinsights.io/subscriptions/56dcf710-f955-442e-8ac2-3b90ab65dea1/resourcegroups/datastudioorchestrator/components/datastudiojobs?q=H4sIAAAAAAAEAFWQMU%2fDMBCFdyT%2bw21NhIvsRB0aKUyAhIAOkB0Z%2bwRGiWNsBxqpP55z07R0su%2fe%2bb37PFjTW8g8fg8YYsgZZBodWo1WGdzX0UuFAXaA20gCaIzStAFq0KOVnVGZHdo2T09xq9BFckzjzvdfqCJE05G17ByD3qGXSX970AzoMZKLsRZ914fYjA4Z0HCQH2fC89Ric3R%2bebGD30%2f0eOYIdQ2Lu9Kb8n4jXx55vQBJ%2bx7z4YZWlhFTIyu4WC8FX3LRFLwSRcXF9bpYlatCXHFecb4PmRmamYH2PfoxeMUf9CaOT3S2JIX%2fNYPNBJg4GRwgaOpAyOD29JPTLXH1XqOH9xFOmRqD%2bgNPJuobqQEAAA%3d%3d&apptype=web",
+      "elapsedMilliseconds": 10495,
+      "parameters": {
+        "startDateTime": "2019-09-30T16:47:00Z",
+        "endDateTime": "2019-10-01T16:47:00Z"
+      },
+      "segments": [
+        {
+          "segmentId": "674c4950-905d-4181-9b86-e0b745035cc0",
+          "startTime": "2019-10-01T20:12:01.972218Z",
+          "endTime": "2019-10-01T20:12:12.3849998Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Eventlog_Output"
+        }
+      ],
+      "groupId": null
+    }
+  ],
+  "shareType": "shared",
+  "eTag": ""
+}

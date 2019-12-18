@@ -1,0 +1,479 @@
+{
+  "id": "ffea960a654240e9a65ac0538f0711e5",
+  "name": "Perf",
+  "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+  "provider": "Dso",
+  "scenario": "",
+  "description": "",
+  "tags": "",
+  "config": {
+    "jobName": "ffea960a654240e9a65ac0538f0711e5",
+    "jobDisplayName": "Perf",
+    "jobDescription": "",
+    "tags": "",
+    "maxJobInstances": 1,
+    "isDebug": false,
+    "appendUtcIndicator": false,
+    "allocationType": 0,
+    "jobScheduleSettings": {
+      "scheduleType": "Frequency",
+      "frequencySettings": {
+        "cronSchedule": "0 33 19 */1 * *",
+        "backFill": false,
+        "monthly": false
+      }
+    },
+    "defaultICMAlerts": false,
+    "activities": [
+      {
+        "activityDisplayName": "Perf (Agg) - Timeline Selector",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "eeadba7e-8ac1-4410-95f0-2bad9e5e4d74",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet timewindow=4h;\r\nlet notused=\"blah\";\r\nlet TotalTimeWindowEnd=toscalar(union withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n    | summarize max(OccurrenceTime));\r\nlet TotalTimeWindowBegin=toscalar(union withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n    | where OccurrenceTime>datetime(1975-03-25) \r\n    | summarize min(OccurrenceTime));\r\nlet timeWindowEnd=todatetime(TotalTimeWindowEnd);\r\nrange OccurrenceTime from TotalTimeWindowBegin to timeWindowEnd-timewindow step 10m\r\n| extend Value=0\r\n| union (\r\n    range OccurrenceTime from timeWindowEnd to TotalTimeWindowEnd step 10m\r\n    | extend Value=0)\r\n| union (\r\n    range OccurrenceTime from timeWindowEnd-timewindow to timeWindowEnd step 10m\r\n    | extend Value=1)\r\n| project Value,OccurrenceTime | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Perf Agg - Timeline Selector"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Perf Agg - CPU Utilization - processor_total_percentage_processor_time",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "0970c383-d3b5-4470-87b5-d75a14cf24d3",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxrecords=100000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet timewindow=4h;\r\nlet endTimeWindow=toscalar(union withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n    | summarize max(OccurrenceTime));\r\nunion withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n| where OccurrenceTime>endTimeWindow-timewindow \r\n| extend info=extractall(@\"PerformanceCounter-(VM|Host)-([\\w-]*)\",SourceTable)\r\n| project OccurrenceTime,Type=tostring(info[0][0]),Name=tostring(info[0][1]),processor_total_percentage_processor_time\r\n| summarize avg(processor_total_percentage_processor_time) by bin(OccurrenceTime, time(10m)),tostring(Name) | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "table": "Perf Agg - CPU Utilization - processor_total_percentage_processor_time"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Perf Agg- Committed Memory - memory_committed_bytes",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "1dc568d6-112c-41a8-8ae9-8081a7b39a18",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxrecords=100000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet timewindow=4h;\r\nlet endTimeWindow=toscalar(union withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n    | summarize max(OccurrenceTime));\r\nunion withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n| where OccurrenceTime>endTimeWindow-timewindow \r\n| extend info=extractall(@\"PerformanceCounter-(VM|Host)-([\\w-]*)\",SourceTable)\r\n| project OccurrenceTime,Name=tostring(info[0][1]),memory_committed_bytes\r\n| summarize avg(memory_committed_bytes) by bin(OccurrenceTime, time(10m)),tostring(Name) | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Perf Agg- Committed Memory - memory_committed_bytes"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Perf Agg- Physical Disk Throughput - physicaldisk_total_disk_bytes_per_sec",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "c70e6556-f189-4a64-94e2-8b912d85bb0d",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxrecords=100000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet timewindow=4h;\r\nlet endTimeWindow=toscalar(union withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n    | summarize max(OccurrenceTime));\r\nunion withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n| where OccurrenceTime>endTimeWindow-timewindow \r\n| extend info=extractall(@\"PerformanceCounter-(VM|Host)-([\\w-]*)\",SourceTable)\r\n| project OccurrenceTime,Name=tostring(info[0][1]),physicaldisk_total_disk_bytes_per_sec\r\n| summarize avg(physicaldisk_total_disk_bytes_per_sec) by bin(OccurrenceTime, time(10m)),tostring(Name) | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Perf Agg- Physical Disk Throughput - physicaldisk_total_disk_bytes_per_sec"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Perf Agg- Physical Disk Transfers Per Second IOPS Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "d050f601-a59d-4218-bc11-0e16f2cd95d6",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxrecords=100000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet timewindow=4h;\r\nlet endTimeWindow=toscalar(union withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n    | summarize max(OccurrenceTime));\r\nunion withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n| where OccurrenceTime>endTimeWindow-timewindow \r\n| extend info=extractall(@\"PerformanceCounter-(VM|Host)-([\\w-]*)\",SourceTable)\r\n| project OccurrenceTime,Name=tostring(info[0][1]),physicaldisk_total_disk_transfers_per_sec\r\n| summarize avg(physicaldisk_total_disk_transfers_per_sec) by bin(OccurrenceTime, time(10m)),tostring(Name) | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Perf Agg- Physical Disk Transfers Per Second IOPS Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Perf Agg - Physical Network Throughput - network_interface_instances_bytes_total_per_sec",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "f23c75f4-31e5-475c-8948-04b8d6137189",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxrecords=100000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet timewindow=4h;\r\nlet endTimeWindow=toscalar(union withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n    | summarize max(OccurrenceTime));\r\nunion withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n| where OccurrenceTime>endTimeWindow-timewindow \r\n| extend info=extractall(@\"PerformanceCounter-(VM|Host)-([\\w-]*)\",SourceTable)\r\n| project OccurrenceTime,Name=tostring(info[0][1]),NIC_Info=['network_interface_instances_bytes_total_per_sec']\r\n| mvexpand bagexpansion=array NIC_Info\r\n| project OccurrenceTime,Name,AdapterName=tostring(NIC_Info[0]), BytesPerSecond=todouble(NIC_Info[1])\r\n| where AdapterName !startswith \"isatap\" and AdapterName !startswith \"intel\"\r\n| summarize avg(BytesPerSecond) by bin(OccurrenceTime, time(10m)),tostring(Name),tostring(AdapterName) | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Perf Agg - Physical Network Throughput - network_interface_instances_bytes_total_per_sec"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Perf Agg - Hosts only Total CSV Read Operations Per Second Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "dc6ee0fd-97e3-48ba-81e0-7d069352dd52",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxrecords=100000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet timewindow=4h;\r\nlet view = datatable(OccurrenceTime:datetime,Name:string,cluster_csv_file_system_total_redirected_reads_per_sec:real) [];  \r\nlet endTimeWindow=toscalar(union withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n    | summarize max(OccurrenceTime));\r\nunion withsource=SourceTable view,database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n| where OccurrenceTime>endTimeWindow-timewindow \r\n| extend info=extractall(@\"PerformanceCounter-(VM|Host)-([\\w-]*)\",SourceTable)\r\n| project OccurrenceTime,Name=tostring(info[0][1]),cluster_csv_file_system_total_redirected_reads_per_sec\r\n| summarize avg(cluster_csv_file_system_total_redirected_reads_per_sec) by bin(OccurrenceTime, time(10m)),tostring(Name) | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Perf Agg - Hosts only Total CSV Read Operations Per Second Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Perf Agg- Hosts only Total CSV Write Operations Per Second Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "dfac56e9-4d6c-4585-a2a8-6050457eb71f",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxrecords=100000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet timewindow=4h;\r\nlet view = datatable(OccurrenceTime:datetime,Name:string,cluster_csv_file_system_total_redirected_writes_per_sec:real) [];  \r\nlet endTimeWindow=toscalar(union withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n    | summarize max(OccurrenceTime));\r\nunion withsource=SourceTable view,database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n| where OccurrenceTime>endTimeWindow-timewindow \r\n| extend info=extractall(@\"PerformanceCounter-(VM|Host)-([\\w-]*)\",SourceTable)\r\n| project OccurrenceTime,Name=tostring(info[0][1]),cluster_csv_file_system_total_redirected_writes_per_sec\r\n| summarize avg(cluster_csv_file_system_total_redirected_writes_per_sec) by bin(OccurrenceTime, time(10m)),tostring(Name) | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Perf Agg- Hosts only Total CSV Write Operations Per Second Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Perf (Raw) - Timeline Selector",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "02b249ae-6899-45d1-a605-ae05c5196966",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet timewindow=15m;\r\nlet notused=\"blah\";\r\nlet TotalTimeWindowEnd=toscalar(union withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n    | summarize max(OccurrenceTime));\r\nlet TotalTimeWindowBegin=toscalar(union withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n    | where OccurrenceTime>datetime(1975-03-25) \r\n    | summarize min(OccurrenceTime));\r\nlet timeWindowEnd=todatetime(TotalTimeWindowEnd);\r\nrange OccurrenceTime from TotalTimeWindowBegin to timeWindowEnd-timewindow step 10m\r\n| extend Value=0\r\n| union (\r\n    range OccurrenceTime from timeWindowEnd to TotalTimeWindowEnd step 10m\r\n    | extend Value=0)\r\n| union (\r\n    range OccurrenceTime from timeWindowEnd-timewindow to timeWindowEnd step 10m\r\n    | extend Value=1)\r\n| project Value,OccurrenceTime | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Perf Raw- Timeline Selector"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Perf Raw- Total Committed Memory Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "743f8d26-1c6d-4525-b13b-f2793087aab3",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxrecords=100000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet timewindow=15m;\r\nlet endTimeWindow=toscalar(union withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n    | summarize max(OccurrenceTime));\r\nunion withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n| where OccurrenceTime>endTimeWindow-timewindow \r\n| extend info=extractall(@\"PerformanceCounter-(VM|Host)-([\\w-]*)\",SourceTable)\r\n| project OccurrenceTime,Name=tostring(info[0][1]),memory_committed_bytes\r\n| project memory_committed_bytes,OccurrenceTime,Name | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Perf Raw- Total Committed Memory Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Perf Raw- Physical Disk Total Bytes Per Second Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "da44c8b3-7efa-4668-b3a8-40f422828249",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxrecords=100000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet timewindow=15m;\r\nlet endTimeWindow=toscalar(union withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n    | summarize max(OccurrenceTime));\r\nunion withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n| where OccurrenceTime>endTimeWindow-timewindow \r\n| extend info=extractall(@\"PerformanceCounter-(VM|Host)-([\\w-]*)\",SourceTable)\r\n| project OccurrenceTime,Name=tostring(info[0][1]),physicaldisk_total_disk_bytes_per_sec\r\n| project physicaldisk_total_disk_bytes_per_sec,OccurrenceTime,Name | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Perf Raw- Physical Disk Total Bytes Per Second Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Perf (Raw) - (Hosts only) Total CSV Write Operations Per Second Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "db15bca4-97ef-4c05-acfb-8e39a077e25f",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxrecords=100000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet timewindow=15m;\r\nlet view = datatable(OccurrenceTime:datetime,Name:string,cluster_csv_file_system_total_redirected_writes_per_sec:real) [];  \r\nlet endTimeWindow=toscalar(union withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n    | summarize max(OccurrenceTime));\r\nunion withsource=SourceTable view,database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n| where OccurrenceTime>endTimeWindow-timewindow \r\n| extend info=extractall(@\"PerformanceCounter-(VM|Host)-([\\w-]*)\",SourceTable)\r\n| project OccurrenceTime,Name=tostring(info[0][1]),cluster_csv_file_system_total_redirected_writes_per_sec\r\n| project cluster_csv_file_system_total_redirected_writes_per_sec,OccurrenceTime,Name | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Timeseries",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Perf Raw- Total CSV Write Operations Per Second Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Perf (Raw) - (Hosts only) Total CSV Read Operations Per Second Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "46721ac5-f36b-4e56-974f-25c71e9c1b63",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxrecords=100000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet timewindow=15m;\r\nlet view = datatable(OccurrenceTime:datetime,Name:string,cluster_csv_file_system_total_redirected_reads_per_sec:real) [];  \r\nlet endTimeWindow=toscalar(union withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n    | summarize max(OccurrenceTime));\r\nunion withsource=SourceTable view,database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n| where OccurrenceTime>endTimeWindow-timewindow \r\n| extend info=extractall(@\"PerformanceCounter-(VM|Host)-([\\w-]*)\",SourceTable)\r\n| project OccurrenceTime,Name=tostring(info[0][1]),cluster_csv_file_system_total_redirected_reads_per_sec\r\n| project cluster_csv_file_system_total_redirected_reads_per_sec,OccurrenceTime,Name | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Perf Raw- Total CSV Read Operations Per Second Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Perf Raw - Network Bytes Per Second Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "b18c7b50-ccb2-4447-a4a2-b9e089d6d8e8",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxrecords=100000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet timewindow=15m;\r\nlet endTimeWindow=toscalar(union withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n    | summarize max(OccurrenceTime));\r\nunion withsource=SourceTable database(\"db\").['PerformanceCounter-VM-*XRP*']\r\n| where OccurrenceTime>endTimeWindow-timewindow \r\n| extend info=extractall(@\"PerformanceCounter-(VM|Host)-([\\w-]*)\",SourceTable)\r\n| project OccurrenceTime,Name=tostring(info[0][1]),NIC_Info=['network_interface_instances_bytes_total_per_sec']\r\n| mvexpand bagexpansion=array NIC_Info\r\n| project OccurrenceTime,Name,AdapterName=tostring(NIC_Info[0]), BytesPerSecond=todouble(NIC_Info[1])\r\n| where AdapterName !startswith \"isatap\"\r\n| project BytesPerSecond,OccurrenceTime,Name,AdapterName | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Perf Raw - Network Bytes Per Second Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      }
+    ],
+    "project": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342",
+    "context": {
+      "uiCron": {
+        "freq": "day",
+        "rate": 1,
+        "value": "0 33 19 */1 * *",
+        "isEntered": false,
+        "hourMins": 59,
+        "minuteSecs": 34,
+        "time": "2019-10-04T02:33:08.616Z",
+        "weekDays": [
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "monthDay": 1
+      },
+      "lensScenario": null,
+      "lensCreatedBy": "v-vasub",
+      "lensCreatedDate": "2019-10-03T19:35:07.8362893Z",
+      "lensModifiedBy": "v-vasub",
+      "lensModifiedDate": "2019-10-03T22:44:08.8745444Z"
+    },
+    "failureWebhook": {
+      "url": "https://lens.msftcloudes.com/share/jobnotificationemail",
+      "aadResource": "aa0c39bf-5086-4900-bf89-6404bff62cf8",
+      "aadTenant": "microsoft.onmicrosoft.com"
+    }
+  },
+  "createdBy": "v-vasub",
+  "createdDate": "2019-10-03T19:35:07.8362893Z",
+  "nextExecutionDate": "2019-10-04T19:33:00Z",
+  "modifiedBy": "v-vasub",
+  "modifiedDate": "2019-10-03T22:44:08.8745444Z",
+  "version": "16",
+  "isEnabled": true,
+  "isQuarantined": false,
+  "instances": [],
+  "shareType": "shared",
+  "eTag": ""
+}

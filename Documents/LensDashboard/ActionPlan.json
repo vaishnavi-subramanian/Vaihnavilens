@@ -1,0 +1,410 @@
+{
+  "id": "4ce4d93d83ad4d15ab5b43dd17f5747d",
+  "name": "ActionPlan",
+  "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+  "provider": "Dso",
+  "scenario": "",
+  "description": "",
+  "tags": "",
+  "config": {
+    "jobName": "4ce4d93d83ad4d15ab5b43dd17f5747d",
+    "jobDisplayName": "ActionPlan",
+    "jobDescription": "",
+    "tags": "",
+    "maxJobInstances": 1,
+    "isDebug": false,
+    "appendUtcIndicator": false,
+    "allocationType": 0,
+    "jobScheduleSettings": {
+      "scheduleType": "Frequency",
+      "frequencySettings": {
+        "cronSchedule": "0 13 20 */1 * *",
+        "backFill": false,
+        "monthly": false
+      }
+    },
+    "defaultICMAlerts": false,
+    "activities": [
+      {
+        "activityDisplayName": "FRPActionPlan-SingleRuns",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "de51ad1a-c582-495f-b086-815d65570ff3",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nlet view=datatable(ActionPlan:string,ActionPlanInstanceId:string,ActionPlanName:string,StartTime:datetime,StopTime:datetime,ActionPlanStatus:string,Success:int,Error:int,Cancelled:int)[];\r\nunion isfuzzy=true view,(\r\n    union cluster('{cluster}').database('{database}')\r\n    .['ETL-Microsoft-AzureStack-CloudEngine.ActionPlan*']\r\n    | extend Database=extract(\"database\\\\(\\\\\\\"([\\\\w-.]*)\\\\\\\"\\\\)\",1,source)\r\n    | distinct EventName,OccurrenceTime,ActionPlanInstanceId,ActionPlanName,ActionPlanStatus,ActivityID,Database\r\n    | extend ActionPlanInstanceId=tostring(ActionPlanInstanceId)\r\n    | summarize (StartTime,StartEventName)=arg_min(OccurrenceTime,EventName),(StopTime,ActionPlanStatus,StopEventName)=arg_max(OccurrenceTime,ActionPlanStatus,EventName),ActionPlanName=any(ActionPlanName) by ActionPlanInstanceId\r\n    | where StartEventName==\"ActionPlan/Start\" or StopEventName==\"ActionPlan/Stop\" \r\n    | project ActionPlan=strcat(ActionPlanName,\" (\",ActionPlanInstanceId,\")\"),ActionPlanInstanceId,ActionPlanName,StartTime,StopTime,ActionPlanStatus,Database,Duration=StopTime-StartTime,MachineName\r\n    | extend Success=toint(iff(ActionPlanStatus==\"Success\",1,0)),Error=toint(iff(ActionPlanStatus==\"Error\",1,0)),Cancelled=toint(iff(ActionPlanStatus==\"Cancelled\",1,0)) \r\n)"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "ActionPlan-SingleRun"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "FRP-ActionPlan-Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "bab682a7-acb8-40c6-96dd-8e15babdf4ad",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(ActionPlan:string,OccurrenceTime:datetime,isActive:long) [];\r\nlet startTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlan*'] | summarize min(OccurrenceTime));\r\nlet endTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlan*'] | summarize max(OccurrenceTime));\r\nlet binval = 10m;\r\nlet zeroTimeTable =  (range isActive from 0 to 0 step 1\r\n    | mvexpand OccurrenceTime = range(startTime-binval, endTime+binval, binval) to typeof(datetime) limit 65536\r\n    | extend OccurrenceTime = bin(OccurrenceTime, binval),ActionPlan=\"Timeline\");\r\nlet data=(\r\n    database('db').['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStart']\r\n    | distinct ActivityID,EventName,OccurrenceTime,FormattedMessage,ActionPlanName,ActionPlanInstanceId\r\n    | where ActionPlanName != \"TestControlPlane\"\r\n    | summarize OccurrenceTime=min(OccurrenceTime) by ActionPlanName,ActionPlanInstanceId\r\n    | extend OccurrenceTime=pack_array(OccurrenceTime, OccurrenceTime+1s),isActive=pack_array(tolong(0),tolong(1))\r\n    | mvexpand OccurrenceTime,isActive \r\n    | project ActionPlan=strcat(ActionPlanName,\" (\",ActionPlanInstanceId,\")\"),ActionPlanName,todatetime(OccurrenceTime),tolong(isActive),ActionPlanInstanceId,ActionplanInstanceID=ActionPlanInstanceId\r\n    | union (\r\n    database('db').['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStop']\r\n    | distinct ActivityID,EventName,OccurrenceTime,FormattedMessage,ActionPlanName,ActionPlanInstanceId\r\n    | where ActionPlanName != \"TestControlPlane\"\r\n    | summarize OccurrenceTime=max(OccurrenceTime) by ActionPlanName,ActionPlanInstanceId\r\n    | extend OccurrenceTime=pack_array(OccurrenceTime, OccurrenceTime+1s),isActive=pack_array(tolong(1),tolong(0))\r\n    | mvexpand OccurrenceTime,isActive\r\n    | project ActionPlan=strcat(ActionPlanName,\" (\",ActionPlanInstanceId,\")\"),ActionPlanName,todatetime(OccurrenceTime),tolong(isActive),ActionPlanInstanceId,ActionplanInstanceID=ActionPlanInstanceId\r\n    )\r\n);\r\nunion isfuzzy=true view,zeroTimeTable,data\r\n| sort by OccurrenceTime asc\r\n| project isActive,OccurrenceTime,ActionPlan | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "FRP_ActionPlan_Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "FRP-LongestActionPlan",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "de8c5f64-c95d-40e7-b22b-07fdbd355dbd",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nlet view=datatable(ActionPlanInstanceId:string,ActionPlanName:string,ActionPlanStatus:string,Database:string)[];\r\nunion isfuzzy=true view,(\r\n    union withsource=source cluster('{cluster}').database('{database}')\r\n    .['ETL-Microsoft-AzureStack-CloudEngine.ActionPlan*']\r\n    | extend Database=extract(\"database\\\\(\\\\\\\"([\\\\w-.]*)\\\\\\\"\\\\)\",1,source)\r\n    | distinct MachineName,EventName,OccurrenceTime,ActionPlanInstanceId,ActionPlanName,ActionPlanStatus,ActivityID,Database\r\n    | extend ActionPlanInstanceId=tostring(ActionPlanInstanceId),MachineName=tostring(MachineName)\r\n    | summarize (StartTime,StartEventName)=arg_min(OccurrenceTime,EventName),(StopTime,ActionPlanStatus,StopEventName)=arg_max(OccurrenceTime,ActionPlanStatus,EventName),ActionPlanName=any(ActionPlanName) by ActionPlanInstanceId,ActivityID,Database,MachineName\r\n    | where StartEventName==\"ActionPlan/Start\" and StopEventName==\"ActionPlan/Stop\" \r\n    | project ActionPlanInstanceId,ActionPlanName,StartTime,StopTime,ActionPlanStatus,DurationInSec=toint((StopTime-StartTime)/1s),Database,MachineName\r\n    | summarize argmax(DurationInSec,*) by ActionPlanName\r\n    | project ActionPlanName,Duration=max_DurationInSec*1s,ActionPlanInstanceId=max_DurationInSec_ActionPlanInstanceId,ActionPlanStatus=max_DurationInSec_ActionPlanStatus,Database=max_DurationInSec_Database,MachineName=max_DurationInSec_MachineName \r\n    | extend Cluster='{cluster}'\r\n    | order by Duration desc\r\n)\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Action_FRP_LongestRun"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "FRP-LongestSteps_per_StepName",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "d0e0f9e8-ee62-4f38-9ba4-6a8ddd4680d7",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "    set query_take_max_records=5000;\r\nlet view=datatable(Name:string,Duration:timespan,ActionPlanName:string,FullyQualifiedId:string,ActionPlanInstanceId:string,ActionPlanStatus:string,Database:string,Cluster:string, ActionPlan:string)[];\r\nunion isfuzzy=true view,(\r\n    union withsource=source cluster('{cluster}').database('{database}')\r\n    .['ETL-Microsoft-AzureStack-CloudEngine.StepStart']\r\n    | extend Database=extract(\"database\\\\(\\\\\\\"([\\\\w-.]*)\\\\\\\"\\\\)\",1,source)\r\n    | summarize StartTime=arg_min(OccurrenceTime,ActionPlanInstanceId) by ActionPlanInstanceId,Name,FullyQualifiedId,Database\r\n    | join (\r\n            union cluster('{cluster}').database('{database}')\r\n            .['ETL-Microsoft-AzureStack-CloudEngine.StepStop']\r\n            | summarize EndTime=arg_max(OccurrenceTime,ActionPlanInstanceId) by ActionPlanInstanceId,FullyQualifiedId\r\n    ) on ActionPlanInstanceId,FullyQualifiedId\r\n    | join kind=leftouter ( \r\n            union cluster('{cluster}').database('{database}')\r\n           .['ETL-Microsoft-AzureStack-CloudEngine.ActionPlan*']\r\n           | summarize (EndTime,ActionPlanStatus)=arg_max(OccurrenceTime,ActionPlanStatus) by ActionPlanInstanceId,ActionPlanName\r\n    ) on ActionPlanInstanceId\r\n    | extend Duration=EndTime-StartTime\r\n    | project tostring(ActionPlanInstanceId),Name,FullyQualifiedId,StartTime,EndTime,DurationInSec=toint(Duration/1s),ActionPlanName,ActionPlanStatus,Database\r\n    | summarize argmax(DurationInSec,*) by Name\r\n    | project Name,Duration=max_DurationInSec*1s,ActionPlanName=max_DurationInSec_ActionPlanName,FullyQualifiedId=max_DurationInSec_FullyQualifiedId,ActionPlanInstanceId=max_DurationInSec_ActionPlanInstanceId,ActionPlanStatus=max_DurationInSec_ActionPlanStatus,Database=max_DurationInSec_Database,ActionPlan=strcat(max_DurationInSec_ActionPlanName,\" (\",max_DurationInSec_ActionPlanInstanceId,\")\")\r\n    | order by Duration desc\r\n    | extend Cluster='{cluster}'\r\n)"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "ActionPlan_FRP_LongestStep"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "ActionPlan-GanttChart",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "3bb9766c-2a50-41dc-8678-c159eaf10903",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(ActionPlan:string,StartTime:datetime,EndTime:datetime) [];\r\nlet binval = 10m;\r\nunion isfuzzy=true view,(\r\n    database('db').['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStart']\r\n    | distinct ActivityID,EventName,OccurrenceTime,FormattedMessage,ActionPlanName,ActionPlanInstanceId\r\n    | where ActionPlanName != \"TestControlPlane\"\r\n    | summarize StartTime=min(OccurrenceTime) by ActionPlanName,ActionPlanInstanceId\r\n    | project ActionPlan=strcat(ActionPlanName,\" (\",ActionPlanInstanceId,\")\"),StartTime,ActionPlanInstanceId,ActionplanInstanceID=ActionPlanInstanceId,ActionPlanName \r\n    | join (\r\n    database('db').['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStop']\r\n    | distinct ActivityID,EventName,OccurrenceTime,FormattedMessage,ActionPlanName,ActionPlanInstanceId\r\n    | where ActionPlanName != \"TestControlPlane\"\r\n    | summarize EndTime=max(OccurrenceTime) by ActionPlanName,ActionPlanInstanceId\r\n    | project ActionPlan=strcat(ActionPlanName,\" (\",ActionPlanInstanceId,\")\"),EndTime,ActionPlanInstanceId,ActionplanInstanceID=ActionPlanInstanceId,ActionPlanName\r\n    ) on ActionPlan\r\n)\r\n| project StartTime,EndTime,ActionPlan | limit 1000"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "ActionPlan_Gantt_Chart"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Process data",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "80aa49db-7811-45cf-94b5-31c44d5fe607",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "\r\nset query_take_max_records=5000;\r\nlet APlan='None';\r\nlet view=datatable(Name:string,ActionPlanName:string,StartTime:datetime, EndTime:datetime,ActionPlanInstanceId:string,ActionPlan:string)[];\r\nunion isfuzzy=true view,(\r\n    union withsource=source cluster('{cluster}').database('{database}')\r\n    .['ETL-Microsoft-AzureStack-CloudEngine.StepStart']\r\n    | summarize StartTime=arg_min(OccurrenceTime,ActionPlanInstanceId) by ActionPlanInstanceId,Name,FullyQualifiedId\r\n    | join (\r\n            union cluster('{cluster}').database('{database}')\r\n            .['ETL-Microsoft-AzureStack-CloudEngine.StepStop']\r\n            | summarize EndTime=arg_max(OccurrenceTime,ActionPlanInstanceId) by ActionPlanInstanceId,FullyQualifiedId, InvocationStatus\r\n    ) on ActionPlanInstanceId,FullyQualifiedId\r\n    | join kind=leftouter ( \r\n            union cluster('{cluster}').database('{database}')\r\n           .['ETL-Microsoft-AzureStack-CloudEngine.ActionPlan*']\r\n           | summarize (EndTime,ActionPlanStatus)=arg_max(OccurrenceTime,ActionPlanStatus) by ActionPlanInstanceId,ActionPlanName\r\n    ) on ActionPlanInstanceId\r\n    | project Name=strcat(FullyQualifiedId,\" \",Name), ActionPlanName, InvocationStatus, StartTime , EndTime, ActionPlanInstanceId, ActionPlan=strcat(ActionPlanName,\" (\",ActionPlanInstanceId1,\")\")\r\n    | where ActionPlan == APlan\r\n    | order by StartTime asc "
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "ActionPlan_Gantt_chart_table"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      }
+    ],
+    "project": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342",
+    "context": {
+      "uiCron": {
+        "freq": "day",
+        "rate": 1,
+        "value": "0 13 20 */1 * *",
+        "isEntered": false,
+        "hourMins": 54,
+        "minuteSecs": 14,
+        "time": "2019-10-02T03:13:29.353Z",
+        "weekDays": [
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "monthDay": 1
+      },
+      "lensScenario": null,
+      "lensCreatedBy": "v-vasub",
+      "lensCreatedDate": "2019-10-01T20:16:50.6218957Z",
+      "lensModifiedBy": "v-vasub",
+      "lensModifiedDate": "2019-10-01T20:52:47.3503815Z"
+    },
+    "failureWebhook": {
+      "url": "https://lens.msftcloudes.com/share/jobnotificationemail",
+      "aadResource": "aa0c39bf-5086-4900-bf89-6404bff62cf8",
+      "aadTenant": "microsoft.onmicrosoft.com"
+    }
+  },
+  "createdBy": "v-vasub",
+  "createdDate": "2019-10-01T20:16:50.6218957Z",
+  "nextExecutionDate": "2019-10-03T20:13:00Z",
+  "modifiedBy": "v-vasub",
+  "modifiedDate": "2019-10-01T20:52:47.3503815Z",
+  "version": "9",
+  "isEnabled": true,
+  "isQuarantined": false,
+  "instances": [
+    {
+      "id": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342|4ce4d93d83ad4d15ab5b43dd17f5747d|M|2019-10-02T20:34:29.4131894Z",
+      "jobId": "4ce4d93d83ad4d15ab5b43dd17f5747d",
+      "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+      "status": "Failed",
+      "jobStatus": "5",
+      "errorMsg": "{\"exceptionMessage\":\"Bad request: Request is invalid and cannot be executed.\\r\\nSyntax error: Query could not be parsed: SYN0002: A recognition error occurred. [line:position=21:98]. Query: 'set query_take_max_records=5000;\\r\\nlet APlan='None';\\r\\nlet view=datatable(Name:string,ActionPlanName:string,StartTime:datetime, EndTime:datetime,ActionPlanInstanceId:string,ActionPlan:string)[];\\r\\nunion isfuzzy=true view,(\\r\\n    union withsource=source cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n    .['ETL-Microsoft-AzureStack-CloudEngine.StepStart']\\r\\n    | summarize StartTime=arg_min(OccurrenceTime,ActionPlanInstanceId) by ActionPlanInstanceId,Name,FullyQualifiedId\\r\\n    | join (\\r\\n            union cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n            .['ETL-Microsoft-AzureStack-CloudEngine.StepStop']\\r\\n            | summarize EndTime=arg_max(OccurrenceTime,ActionPlanInstanceId) by ActionPlanInstanceId,FullyQualifiedId, InvocationStatus\\r\\n    ) on ActionPlanInstanceId,FullyQualifiedId\\r\\n    | join kind=leftouter ( \\r\\n            union cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n           .['ETL-Microsoft-AzureStack-CloudEngine.ActionPlan*']\\r\\n           | summarize (EndTime,ActionPlanStatus)=arg_max(OccurrenceTime,ActionPlanStatus) by ActionPlanInstanceId,ActionPlanName\\r\\n    ) on ActionPlanInstanceId\\r\\n    | project Name=strcat(FullyQualifiedId,\\\" \\\",Name), ActionPlanName, InvocationStatus, StartTime , EndTime, ActionPlanInstanceId, ActionPlan=strcat(ActionPlanName,\\\" (\\\",ActionPlanInstanceId1,\\\")\\\")\\r\\n    | where ActionPlan == APlan\\r\\n    | order by StartTime asc\\n| getschema | project ColumnName, ColumnType, ColumnOrdinal, DataType | order by ColumnOrdinal asc'\\r\\nPlease provide the following information when contacting the Kusto team:\\r\\nClientRequestId='XLYCOol313g=.45', ActivityId='d60ce753-cf70-449d-b41e-aa8529657d57', Timestamp='2019-10-02T20:35:28.4305940Z'.\",\"exceptionType\":\"Orchestrator.Exceptions.ActivityFailureException\",\"stackTrace\":\"   at FrontEnd.WorkerPools.WorkerPoolManager.<RunInstanceAsync>d__12.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\WorkerPools\\\\WorkerPoolManager.cs:line 451\\r\\n   at FrontEnd.WorkerPools.WorkerPoolManager.<RunAsync>d__10.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\WorkerPools\\\\WorkerPoolManager.cs:line 126\",\"innerException\":{\"exceptionMessage\":\"Bad request: Request is invalid and cannot be executed.\\r\\nSyntax error: Query could not be parsed: SYN0002: A recognition error occurred. [line:position=21:98]. Query: 'set query_take_max_records=5000;\\r\\nlet APlan='None';\\r\\nlet view=datatable(Name:string,ActionPlanName:string,StartTime:datetime, EndTime:datetime,ActionPlanInstanceId:string,ActionPlan:string)[];\\r\\nunion isfuzzy=true view,(\\r\\n    union withsource=source cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n    .['ETL-Microsoft-AzureStack-CloudEngine.StepStart']\\r\\n    | summarize StartTime=arg_min(OccurrenceTime,ActionPlanInstanceId) by ActionPlanInstanceId,Name,FullyQualifiedId\\r\\n    | join (\\r\\n            union cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n            .['ETL-Microsoft-AzureStack-CloudEngine.StepStop']\\r\\n            | summarize EndTime=arg_max(OccurrenceTime,ActionPlanInstanceId) by ActionPlanInstanceId,FullyQualifiedId, InvocationStatus\\r\\n    ) on ActionPlanInstanceId,FullyQualifiedId\\r\\n    | join kind=leftouter ( \\r\\n            union cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n           .['ETL-Microsoft-AzureStack-CloudEngine.ActionPlan*']\\r\\n           | summarize (EndTime,ActionPlanStatus)=arg_max(OccurrenceTime,ActionPlanStatus) by ActionPlanInstanceId,ActionPlanName\\r\\n    ) on ActionPlanInstanceId\\r\\n    | project Name=strcat(FullyQualifiedId,\\\" \\\",Name), ActionPlanName, InvocationStatus, StartTime , EndTime, ActionPlanInstanceId, ActionPlan=strcat(ActionPlanName,\\\" (\\\",ActionPlanInstanceId1,\\\")\\\")\\r\\n    | where ActionPlan == APlan\\r\\n    | order by StartTime asc\\n| getschema | project ColumnName, ColumnType, ColumnOrdinal, DataType | order by ColumnOrdinal asc'\\r\\nPlease provide the following information when contacting the Kusto team:\\r\\nClientRequestId='XLYCOol313g=.45', ActivityId='d60ce753-cf70-449d-b41e-aa8529657d57', Timestamp='2019-10-02T20:35:28.4305940Z'.\",\"exceptionType\":\"Orchestrator.Exceptions.OrchestratorBadRequestException\",\"stackTrace\":\"   at FrontEnd.Clients.WorkerPoolClient.ThrowWorkerException(HttpStatusCode statusCode, String contextName, ExceptionResponse exceptionResponse) in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\Clients\\\\WorkerPoolClient.cs:line 88\\r\\n   at FrontEnd.Clients.WorkerPoolClient.<GetOperationStatusAsync>d__9.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\Clients\\\\WorkerPoolClient.cs:line 277\\r\\n   at FrontEnd.WorkerPools.WorkerPoolManager.<WaitForOperationToCompleteAsync>d__14.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\WorkerPools\\\\WorkerPoolManager.cs:line 527\\r\\n   at FrontEnd.WorkerPools.WorkerPoolManager.<RunInstanceAsync>d__12.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\WorkerPools\\\\WorkerPoolManager.cs:line 372\",\"innerException\":{\"exceptionMessage\":\"Bad request: Request is invalid and cannot be executed.\\r\\nSyntax error: Query could not be parsed: SYN0002: A recognition error occurred. [line:position=21:98]. Query: 'set query_take_max_records=5000;\\r\\nlet APlan='None';\\r\\nlet view=datatable(Name:string,ActionPlanName:string,StartTime:datetime, EndTime:datetime,ActionPlanInstanceId:string,ActionPlan:string)[];\\r\\nunion isfuzzy=true view,(\\r\\n    union withsource=source cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n    .['ETL-Microsoft-AzureStack-CloudEngine.StepStart']\\r\\n    | summarize StartTime=arg_min(OccurrenceTime,ActionPlanInstanceId) by ActionPlanInstanceId,Name,FullyQualifiedId\\r\\n    | join (\\r\\n            union cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n            .['ETL-Microsoft-AzureStack-CloudEngine.StepStop']\\r\\n            | summarize EndTime=arg_max(OccurrenceTime,ActionPlanInstanceId) by ActionPlanInstanceId,FullyQualifiedId, InvocationStatus\\r\\n    ) on ActionPlanInstanceId,FullyQualifiedId\\r\\n    | join kind=leftouter ( \\r\\n            union cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n           .['ETL-Microsoft-AzureStack-CloudEngine.ActionPlan*']\\r\\n           | summarize (EndTime,ActionPlanStatus)=arg_max(OccurrenceTime,ActionPlanStatus) by ActionPlanInstanceId,ActionPlanName\\r\\n    ) on ActionPlanInstanceId\\r\\n    | project Name=strcat(FullyQualifiedId,\\\" \\\",Name), ActionPlanName, InvocationStatus, StartTime , EndTime, ActionPlanInstanceId, ActionPlan=strcat(ActionPlanName,\\\" (\\\",ActionPlanInstanceId1,\\\")\\\")\\r\\n    | where ActionPlan == APlan\\r\\n    | order by StartTime asc\\n| getschema | project ColumnName, ColumnType, ColumnOrdinal, DataType | order by ColumnOrdinal asc'\\r\\nPlease provide the following information when contacting the Kusto team:\\r\\nClientRequestId='XLYCOol313g=.45', ActivityId='d60ce753-cf70-449d-b41e-aa8529657d57', Timestamp='2019-10-02T20:35:28.4305940Z'.\",\"exceptionType\":\"Kusto.Data.Exceptions.KustoBadRequestException\",\"stackTrace\":\"   at Kusto.Data.Net.Client.RestClient2.<ThrowKustoExceptionFromResponseMessageAsync>d__45.MoveNext()\\r\\n   at Kusto.Data.Net.Client.RestClient2.<MakeHttpRequestAsyncImpl>d__41.MoveNext()\\r\\n   at Kusto.Cloud.Platform.Utils.MonitoredActivity.<InvokeAsync>d__15`2.MoveNext()\\r\\n   at Kusto.Cloud.Platform.Utils.MonitoredActivity.<InvokeAsync>d__15`2.MoveNext()\\r\\n   at Kusto.Data.Net.Client.RestClient2.<MakeHttpRequestAsync>d__39.MoveNext()\\r\\n   at Kusto.Data.Net.Client.RestClient2.<ExecuteQueryAsync>d__28.MoveNext()\\r\\n   at Shared.Clients.KustoClient.<ExecuteQueryAsync>d__54.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Clients\\\\KustoClient.cs:line 825\\r\\n   at Shared.Clients.KustoClient.<>c__DisplayClass31_0.<<QueryTableAsync>b__0>d.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Clients\\\\KustoClient.cs:line 368\\r\\n   at Shared.Utilities.RetryUtility.<RetryAsync>d__14`2.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Utilities\\\\RetryUtility.cs:line 394\\r\\n   at Shared.Utilities.RetryUtility.<RetryAsync>d__3`1.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Utilities\\\\RetryUtility.cs:line 0\\r\\n   at Shared.Clients.KustoClient.<QueryTableAsync>d__31.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Clients\\\\KustoClient.cs:line 368\\r\\n   at Shared.Clients.KustoClient.<GetSchemaAsync>d__32.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Clients\\\\KustoClient.cs:line 378\\r\\n   at Worker.WorkerPools.DataStudioMovementWorkerPool.<CopyTableAsync>d__28.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Worker\\\\WorkerPools\\\\DataStudioMovementWorkerPool.cs:line 1515\\r\\n   at Worker.WorkerPools.DataStudioMovementWorkerPool.<RunActivityKustoToKustoAsync>d__27.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Worker\\\\WorkerPools\\\\DataStudioMovementWorkerPool.cs:line 1407\\r\\n   at Worker.WorkerPools.DataStudioMovementWorkerPool.<RunActivityAsync>d__21.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Worker\\\\WorkerPools\\\\DataStudioMovementWorkerPool.cs:line 1204\\r\\n   at Worker.Controllers.JobActivityController.<>c__DisplayClass10_0.<<RunActivityAsync>b__0>d.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Worker\\\\Controllers\\\\JobActivityController.cs:line 350\",\"innerException\":{\"exceptionMessage\":\"Bad request: Request is invalid and cannot be executed.\\r\\nSyntax error: Query could not be parsed: SYN0002: A recognition error occurred. [line:position=21:98]. Query: 'set query_take_max_records=5000;\\r\\nlet APlan='None';\\r\\nlet view=datatable(Name:string,ActionPlanName:string,StartTime:datetime, EndTime:datetime,ActionPlanInstanceId:string,ActionPlan:string)[];\\r\\nunion isfuzzy=true view,(\\r\\n    union withsource=source cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n    .['ETL-Microsoft-AzureStack-CloudEngine.StepStart']\\r\\n    | summarize StartTime=arg_min(OccurrenceTime,ActionPlanInstanceId) by ActionPlanInstanceId,Name,FullyQualifiedId\\r\\n    | join (\\r\\n            union cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n            .['ETL-Microsoft-AzureStack-CloudEngine.StepStop']\\r\\n            | summarize EndTime=arg_max(OccurrenceTime,ActionPlanInstanceId) by ActionPlanInstanceId,FullyQualifiedId, InvocationStatus\\r\\n    ) on ActionPlanInstanceId,FullyQualifiedId\\r\\n    | join kind=leftouter ( \\r\\n            union cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n           .['ETL-Microsoft-AzureStack-CloudEngine.ActionPlan*']\\r\\n           | summarize (EndTime,ActionPlanStatus)=arg_max(OccurrenceTime,ActionPlanStatus) by ActionPlanInstanceId,ActionPlanName\\r\\n    ) on ActionPlanInstanceId\\r\\n    | project Name=strcat(FullyQualifiedId,\\\" \\\",Name), ActionPlanName, InvocationStatus, StartTime , EndTime, ActionPlanInstanceId, ActionPlan=strcat(ActionPlanName,\\\" (\\\",ActionPlanInstanceId1,\\\")\\\")\\r\\n    | where ActionPlan == APlan\\r\\n    | order by StartTime asc\\n| getschema | project ColumnName, ColumnType, ColumnOrdinal, DataType | order by ColumnOrdinal asc'\\r\\nPlease provide the following information when contacting the Kusto team:\\r\\nClientRequestId='XLYCOol313g=.45', ActivityId='d60ce753-cf70-449d-b41e-aa8529657d57', Timestamp='2019-10-02T20:35:28.4305940Z'.\",\"exceptionType\":\"System.Exception\",\"stackTrace\":null}}}}",
+      "createdDate": "2019-10-02T20:34:29Z",
+      "startTime": "2019-10-02T20:34:29Z",
+      "endTime": "2019-10-02T20:35:31Z",
+      "elapsedTime": "2019-10-03T00:01:02.5253829Z",
+      "seed": "2019-10-01T20:13:00Z",
+      "logLink": "https://analytics.applicationinsights.io/subscriptions/56dcf710-f955-442e-8ac2-3b90ab65dea1/resourcegroups/datastudioorchestrator/components/datastudiojobs?q=H4sIAAAAAAAEAFWQP0%2fDMBDFdyS%2bw21NhIucPwOJFBZYkAoMdIAJGftUjBLb2A40Uj88l6Zp6WTfvfN793NvtDWQePzuMcSQMkgUOjQKjdS4r6MXEgPsALeRBFAYhW4DNKAGIzotE9O3bTo%2bxa1EF8lxHHfefqGMEHVH1qJzDKxDL0b9%2fUExoMdILtoY9J0NcT04ZEDDQWzOhMepxebo9PJiB7%2bf6PHMEZoGFq%2brt7tn2xZZsWkWIGjfYz7c0soi4thIcp5Vy4wveb7OeV2UdV5dl1mR3VTlFec15%2fuQmWE9M9C%2bRz8GL%2fiDXsdhRWdLUvhfM3iaAEdOBgcImjoQMrg%2f%2feR0G7msV%2bjhY4BTpsIg%2fwDoTvx%2fqQEAAA%3d%3d&apptype=web",
+      "elapsedMilliseconds": 62525,
+      "parameters": {
+        "startDateTime": "2019-10-01T20:13:00Z",
+        "endDateTime": "2019-10-02T20:13:00Z"
+      },
+      "segments": [
+        {
+          "segmentId": "de51ad1a-c582-495f-b086-815d65570ff3",
+          "startTime": "2019-10-02T20:34:29.4726508Z",
+          "endTime": "2019-10-02T20:34:51.3070882Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "FRPActionPlan-SingleRuns"
+        },
+        {
+          "segmentId": "bab682a7-acb8-40c6-96dd-8e15babdf4ad",
+          "startTime": "2019-10-02T20:34:51.3226869Z",
+          "endTime": "2019-10-02T20:35:01.2847205Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "FRP-ActionPlan-Timeline"
+        },
+        {
+          "segmentId": "de8c5f64-c95d-40e7-b22b-07fdbd355dbd",
+          "startTime": "2019-10-02T20:35:01.5012155Z",
+          "endTime": "2019-10-02T20:35:10.9947935Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "FRP-LongestActionPlan"
+        },
+        {
+          "segmentId": "d0e0f9e8-ee62-4f38-9ba4-6a8ddd4680d7",
+          "startTime": "2019-10-02T20:35:11.0416736Z",
+          "endTime": "2019-10-02T20:35:19.2762529Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "FRP-LongestSteps_per_StepName"
+        },
+        {
+          "segmentId": "3bb9766c-2a50-41dc-8678-c159eaf10903",
+          "startTime": "2019-10-02T20:35:19.2918541Z",
+          "endTime": "2019-10-02T20:35:28.2235494Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "ActionPlan-GanttChart"
+        },
+        {
+          "segmentId": "80aa49db-7811-45cf-94b5-31c44d5fe607",
+          "startTime": "2019-10-02T20:35:28.2481753Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Process data"
+        }
+      ],
+      "groupId": null
+    },
+    {
+      "id": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342|4ce4d93d83ad4d15ab5b43dd17f5747d|T|2019-10-02T20:13:00.0000000Z",
+      "jobId": "4ce4d93d83ad4d15ab5b43dd17f5747d",
+      "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+      "status": "Failed",
+      "jobStatus": "5",
+      "errorMsg": "{\"exceptionMessage\":\"Bad request: Request is invalid and cannot be executed.\\r\\nSyntax error: Query could not be parsed: SYN0002: A recognition error occurred. [line:position=21:98]. Query: 'set query_take_max_records=5000;\\r\\nlet APlan='None';\\r\\nlet view=datatable(Name:string,ActionPlanName:string,StartTime:datetime, EndTime:datetime,ActionPlanInstanceId:string,ActionPlan:string)[];\\r\\nunion isfuzzy=true view,(\\r\\n    union withsource=source cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n    .['ETL-Microsoft-AzureStack-CloudEngine.StepStart']\\r\\n    | summarize StartTime=arg_min(OccurrenceTime,ActionPlanInstanceId) by ActionPlanInstanceId,Name,FullyQualifiedId\\r\\n    | join (\\r\\n            union cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n            .['ETL-Microsoft-AzureStack-CloudEngine.StepStop']\\r\\n            | summarize EndTime=arg_max(OccurrenceTime,ActionPlanInstanceId) by ActionPlanInstanceId,FullyQualifiedId, InvocationStatus\\r\\n    ) on ActionPlanInstanceId,FullyQualifiedId\\r\\n    | join kind=leftouter ( \\r\\n            union cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n           .['ETL-Microsoft-AzureStack-CloudEngine.ActionPlan*']\\r\\n           | summarize (EndTime,ActionPlanStatus)=arg_max(OccurrenceTime,ActionPlanStatus) by ActionPlanInstanceId,ActionPlanName\\r\\n    ) on ActionPlanInstanceId\\r\\n    | project Name=strcat(FullyQualifiedId,\\\" \\\",Name), ActionPlanName, InvocationStatus, StartTime , EndTime, ActionPlanInstanceId, ActionPlan=strcat(ActionPlanName,\\\" (\\\",ActionPlanInstanceId1,\\\")\\\")\\r\\n    | where ActionPlan == APlan\\r\\n    | order by StartTime asc\\n| getschema | project ColumnName, ColumnType, ColumnOrdinal, DataType | order by ColumnOrdinal asc'\\r\\nPlease provide the following information when contacting the Kusto team:\\r\\nClientRequestId='1c8233EApUc=.8', ActivityId='40808ba7-73ba-422f-952b-9349bbcdf929', Timestamp='2019-10-02T20:13:42.9722980Z'.\",\"exceptionType\":\"Orchestrator.Exceptions.ActivityFailureException\",\"stackTrace\":\"   at FrontEnd.WorkerPools.WorkerPoolManager.<RunInstanceAsync>d__12.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\WorkerPools\\\\WorkerPoolManager.cs:line 451\\r\\n   at FrontEnd.WorkerPools.WorkerPoolManager.<RunAsync>d__10.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\WorkerPools\\\\WorkerPoolManager.cs:line 126\",\"innerException\":{\"exceptionMessage\":\"Bad request: Request is invalid and cannot be executed.\\r\\nSyntax error: Query could not be parsed: SYN0002: A recognition error occurred. [line:position=21:98]. Query: 'set query_take_max_records=5000;\\r\\nlet APlan='None';\\r\\nlet view=datatable(Name:string,ActionPlanName:string,StartTime:datetime, EndTime:datetime,ActionPlanInstanceId:string,ActionPlan:string)[];\\r\\nunion isfuzzy=true view,(\\r\\n    union withsource=source cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n    .['ETL-Microsoft-AzureStack-CloudEngine.StepStart']\\r\\n    | summarize StartTime=arg_min(OccurrenceTime,ActionPlanInstanceId) by ActionPlanInstanceId,Name,FullyQualifiedId\\r\\n    | join (\\r\\n            union cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n            .['ETL-Microsoft-AzureStack-CloudEngine.StepStop']\\r\\n            | summarize EndTime=arg_max(OccurrenceTime,ActionPlanInstanceId) by ActionPlanInstanceId,FullyQualifiedId, InvocationStatus\\r\\n    ) on ActionPlanInstanceId,FullyQualifiedId\\r\\n    | join kind=leftouter ( \\r\\n            union cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n           .['ETL-Microsoft-AzureStack-CloudEngine.ActionPlan*']\\r\\n           | summarize (EndTime,ActionPlanStatus)=arg_max(OccurrenceTime,ActionPlanStatus) by ActionPlanInstanceId,ActionPlanName\\r\\n    ) on ActionPlanInstanceId\\r\\n    | project Name=strcat(FullyQualifiedId,\\\" \\\",Name), ActionPlanName, InvocationStatus, StartTime , EndTime, ActionPlanInstanceId, ActionPlan=strcat(ActionPlanName,\\\" (\\\",ActionPlanInstanceId1,\\\")\\\")\\r\\n    | where ActionPlan == APlan\\r\\n    | order by StartTime asc\\n| getschema | project ColumnName, ColumnType, ColumnOrdinal, DataType | order by ColumnOrdinal asc'\\r\\nPlease provide the following information when contacting the Kusto team:\\r\\nClientRequestId='1c8233EApUc=.8', ActivityId='40808ba7-73ba-422f-952b-9349bbcdf929', Timestamp='2019-10-02T20:13:42.9722980Z'.\",\"exceptionType\":\"Orchestrator.Exceptions.OrchestratorBadRequestException\",\"stackTrace\":\"   at FrontEnd.Clients.WorkerPoolClient.ThrowWorkerException(HttpStatusCode statusCode, String contextName, ExceptionResponse exceptionResponse) in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\Clients\\\\WorkerPoolClient.cs:line 88\\r\\n   at FrontEnd.Clients.WorkerPoolClient.<GetOperationStatusAsync>d__9.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\Clients\\\\WorkerPoolClient.cs:line 277\\r\\n   at FrontEnd.WorkerPools.WorkerPoolManager.<WaitForOperationToCompleteAsync>d__14.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\WorkerPools\\\\WorkerPoolManager.cs:line 527\\r\\n   at FrontEnd.WorkerPools.WorkerPoolManager.<RunInstanceAsync>d__12.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\WorkerPools\\\\WorkerPoolManager.cs:line 372\",\"innerException\":{\"exceptionMessage\":\"Bad request: Request is invalid and cannot be executed.\\r\\nSyntax error: Query could not be parsed: SYN0002: A recognition error occurred. [line:position=21:98]. Query: 'set query_take_max_records=5000;\\r\\nlet APlan='None';\\r\\nlet view=datatable(Name:string,ActionPlanName:string,StartTime:datetime, EndTime:datetime,ActionPlanInstanceId:string,ActionPlan:string)[];\\r\\nunion isfuzzy=true view,(\\r\\n    union withsource=source cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n    .['ETL-Microsoft-AzureStack-CloudEngine.StepStart']\\r\\n    | summarize StartTime=arg_min(OccurrenceTime,ActionPlanInstanceId) by ActionPlanInstanceId,Name,FullyQualifiedId\\r\\n    | join (\\r\\n            union cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n            .['ETL-Microsoft-AzureStack-CloudEngine.StepStop']\\r\\n            | summarize EndTime=arg_max(OccurrenceTime,ActionPlanInstanceId) by ActionPlanInstanceId,FullyQualifiedId, InvocationStatus\\r\\n    ) on ActionPlanInstanceId,FullyQualifiedId\\r\\n    | join kind=leftouter ( \\r\\n            union cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n           .['ETL-Microsoft-AzureStack-CloudEngine.ActionPlan*']\\r\\n           | summarize (EndTime,ActionPlanStatus)=arg_max(OccurrenceTime,ActionPlanStatus) by ActionPlanInstanceId,ActionPlanName\\r\\n    ) on ActionPlanInstanceId\\r\\n    | project Name=strcat(FullyQualifiedId,\\\" \\\",Name), ActionPlanName, InvocationStatus, StartTime , EndTime, ActionPlanInstanceId, ActionPlan=strcat(ActionPlanName,\\\" (\\\",ActionPlanInstanceId1,\\\")\\\")\\r\\n    | where ActionPlan == APlan\\r\\n    | order by StartTime asc\\n| getschema | project ColumnName, ColumnType, ColumnOrdinal, DataType | order by ColumnOrdinal asc'\\r\\nPlease provide the following information when contacting the Kusto team:\\r\\nClientRequestId='1c8233EApUc=.8', ActivityId='40808ba7-73ba-422f-952b-9349bbcdf929', Timestamp='2019-10-02T20:13:42.9722980Z'.\",\"exceptionType\":\"Kusto.Data.Exceptions.KustoBadRequestException\",\"stackTrace\":\"   at Kusto.Data.Net.Client.RestClient2.<ThrowKustoExceptionFromResponseMessageAsync>d__45.MoveNext()\\r\\n   at Kusto.Data.Net.Client.RestClient2.<MakeHttpRequestAsyncImpl>d__41.MoveNext()\\r\\n   at Kusto.Cloud.Platform.Utils.MonitoredActivity.<InvokeAsync>d__15`2.MoveNext()\\r\\n   at Kusto.Cloud.Platform.Utils.MonitoredActivity.<InvokeAsync>d__15`2.MoveNext()\\r\\n   at Kusto.Data.Net.Client.RestClient2.<MakeHttpRequestAsync>d__39.MoveNext()\\r\\n   at Kusto.Data.Net.Client.RestClient2.<ExecuteQueryAsync>d__28.MoveNext()\\r\\n   at Shared.Clients.KustoClient.<ExecuteQueryAsync>d__54.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Clients\\\\KustoClient.cs:line 825\\r\\n   at Shared.Clients.KustoClient.<>c__DisplayClass31_0.<<QueryTableAsync>b__0>d.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Clients\\\\KustoClient.cs:line 368\\r\\n   at Shared.Utilities.RetryUtility.<RetryAsync>d__14`2.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Utilities\\\\RetryUtility.cs:line 394\\r\\n   at Shared.Utilities.RetryUtility.<RetryAsync>d__3`1.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Utilities\\\\RetryUtility.cs:line 0\\r\\n   at Shared.Clients.KustoClient.<QueryTableAsync>d__31.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Clients\\\\KustoClient.cs:line 368\\r\\n   at Shared.Clients.KustoClient.<GetSchemaAsync>d__32.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Clients\\\\KustoClient.cs:line 378\\r\\n   at Worker.WorkerPools.DataStudioMovementWorkerPool.<CopyTableAsync>d__28.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Worker\\\\WorkerPools\\\\DataStudioMovementWorkerPool.cs:line 1515\\r\\n   at Worker.WorkerPools.DataStudioMovementWorkerPool.<RunActivityKustoToKustoAsync>d__27.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Worker\\\\WorkerPools\\\\DataStudioMovementWorkerPool.cs:line 1407\\r\\n   at Worker.WorkerPools.DataStudioMovementWorkerPool.<RunActivityAsync>d__21.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Worker\\\\WorkerPools\\\\DataStudioMovementWorkerPool.cs:line 1204\\r\\n   at Worker.Controllers.JobActivityController.<>c__DisplayClass10_0.<<RunActivityAsync>b__0>d.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Worker\\\\Controllers\\\\JobActivityController.cs:line 350\",\"innerException\":{\"exceptionMessage\":\"Bad request: Request is invalid and cannot be executed.\\r\\nSyntax error: Query could not be parsed: SYN0002: A recognition error occurred. [line:position=21:98]. Query: 'set query_take_max_records=5000;\\r\\nlet APlan='None';\\r\\nlet view=datatable(Name:string,ActionPlanName:string,StartTime:datetime, EndTime:datetime,ActionPlanInstanceId:string,ActionPlan:string)[];\\r\\nunion isfuzzy=true view,(\\r\\n    union withsource=source cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n    .['ETL-Microsoft-AzureStack-CloudEngine.StepStart']\\r\\n    | summarize StartTime=arg_min(OccurrenceTime,ActionPlanInstanceId) by ActionPlanInstanceId,Name,FullyQualifiedId\\r\\n    | join (\\r\\n            union cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n            .['ETL-Microsoft-AzureStack-CloudEngine.StepStop']\\r\\n            | summarize EndTime=arg_max(OccurrenceTime,ActionPlanInstanceId) by ActionPlanInstanceId,FullyQualifiedId, InvocationStatus\\r\\n    ) on ActionPlanInstanceId,FullyQualifiedId\\r\\n    | join kind=leftouter ( \\r\\n            union cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33')\\r\\n           .['ETL-Microsoft-AzureStack-CloudEngine.ActionPlan*']\\r\\n           | summarize (EndTime,ActionPlanStatus)=arg_max(OccurrenceTime,ActionPlanStatus) by ActionPlanInstanceId,ActionPlanName\\r\\n    ) on ActionPlanInstanceId\\r\\n    | project Name=strcat(FullyQualifiedId,\\\" \\\",Name), ActionPlanName, InvocationStatus, StartTime , EndTime, ActionPlanInstanceId, ActionPlan=strcat(ActionPlanName,\\\" (\\\",ActionPlanInstanceId1,\\\")\\\")\\r\\n    | where ActionPlan == APlan\\r\\n    | order by StartTime asc\\n| getschema | project ColumnName, ColumnType, ColumnOrdinal, DataType | order by ColumnOrdinal asc'\\r\\nPlease provide the following information when contacting the Kusto team:\\r\\nClientRequestId='1c8233EApUc=.8', ActivityId='40808ba7-73ba-422f-952b-9349bbcdf929', Timestamp='2019-10-02T20:13:42.9722980Z'.\",\"exceptionType\":\"System.Exception\",\"stackTrace\":null}}}}",
+      "createdDate": "2019-10-02T20:13:00Z",
+      "startTime": "2019-10-02T20:13:00Z",
+      "endTime": "2019-10-02T20:13:49Z",
+      "elapsedTime": "2019-10-03T00:00:48.6036138Z",
+      "seed": "2019-10-01T20:13:00Z",
+      "logLink": "https://analytics.applicationinsights.io/subscriptions/56dcf710-f955-442e-8ac2-3b90ab65dea1/resourcegroups/datastudioorchestrator/components/datastudiojobs?q=H4sIAAAAAAAEAFWQQUvEMBCF74L%2fYW7bYlaSloq7UEHQg6BerGeJyaCRNo1JqlvYH%2b9ku911T8nMm7w3XwZreguZx%2b8BQww5g0yjQ6vRKoO7OnqpMMAWcBNJAI1RmjZADXq0sjMqs0Pb5ukpbhS6SI5p3Pn%2bC1WEaDqylp1j0Dv0MulvD5oBPUZyMdai7%2foQm9EhAxoO8uNEeJpabI7Oz8%2b28PuJHk8coa5hIdR1UZb3t%2b5V1QuQtO8hH25oZRkxNbKCi9VS8CUvmoKvRbnm%2fLLiq0pUVxecU7ULmRmamYH2PfgxeMEf9CaOj3S2JIX%2fNYPnCTBxMthD0NSekMHd8SenW%2bLqvUYP7yMcMzUG9Qcn9RRAqQEAAA%3d%3d&apptype=web",
+      "elapsedMilliseconds": 48603,
+      "parameters": {
+        "startDateTime": "2019-10-01T20:13:00Z",
+        "endDateTime": "2019-10-02T20:13:00Z"
+      },
+      "segments": [
+        {
+          "segmentId": "de51ad1a-c582-495f-b086-815d65570ff3",
+          "startTime": "2019-10-02T20:13:00.6059621Z",
+          "endTime": "2019-10-02T20:13:10.1259364Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "FRPActionPlan-SingleRuns"
+        },
+        {
+          "segmentId": "bab682a7-acb8-40c6-96dd-8e15babdf4ad",
+          "startTime": "2019-10-02T20:13:10.1415758Z",
+          "endTime": "2019-10-02T20:13:19.7215271Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "FRP-ActionPlan-Timeline"
+        },
+        {
+          "segmentId": "de8c5f64-c95d-40e7-b22b-07fdbd355dbd",
+          "startTime": "2019-10-02T20:13:19.7371298Z",
+          "endTime": "2019-10-02T20:13:29.3240456Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "FRP-LongestActionPlan"
+        },
+        {
+          "segmentId": "d0e0f9e8-ee62-4f38-9ba4-6a8ddd4680d7",
+          "startTime": "2019-10-02T20:13:29.3531205Z",
+          "endTime": "2019-10-02T20:13:33.2470359Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "FRP-LongestSteps_per_StepName"
+        },
+        {
+          "segmentId": "3bb9766c-2a50-41dc-8678-c159eaf10903",
+          "startTime": "2019-10-02T20:13:33.2938788Z",
+          "endTime": "2019-10-02T20:13:41.3923864Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "ActionPlan-GanttChart"
+        },
+        {
+          "segmentId": "80aa49db-7811-45cf-94b5-31c44d5fe607",
+          "startTime": "2019-10-02T20:13:41.4236085Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Process data"
+        }
+      ],
+      "groupId": null
+    }
+  ],
+  "shareType": "shared",
+  "eTag": ""
+}

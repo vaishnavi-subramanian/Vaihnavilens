@@ -1,0 +1,213 @@
+{
+  "id": "0f4470255d214b259b43bdf684f398b6",
+  "name": "ECE",
+  "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+  "provider": "Dso",
+  "scenario": "",
+  "description": "",
+  "tags": "",
+  "config": {
+    "jobName": "0f4470255d214b259b43bdf684f398b6",
+    "jobDisplayName": "ECE",
+    "jobDescription": "",
+    "tags": "",
+    "maxJobInstances": 1,
+    "isDebug": false,
+    "appendUtcIndicator": false,
+    "allocationType": 0,
+    "jobScheduleSettings": {
+      "scheduleType": "Frequency",
+      "frequencySettings": {
+        "cronSchedule": "0 1 21 */1 * *",
+        "backFill": false,
+        "monthly": false
+      }
+    },
+    "defaultICMAlerts": false,
+    "activities": [
+      {
+        "activityDisplayName": "ActionPlan_Step_Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "9ffe998f-0c97-41a6-8423-9582751b39a9",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(ActionPlan:string,OccurrenceTime:datetime,isActive:long) [];\r\nlet startTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine*'] | summarize min(OccurrenceTime));\r\nlet endTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine*'] | summarize max(OccurrenceTime));\r\nlet binval = 10m;\r\nlet zeroTimeTable =  (range isActive from 0 to 0 step 1\r\n    | mvexpand OccurrenceTime = range(startTime-binval, endTime+binval, binval) to typeof(datetime) limit 65536\r\n    | extend OccurrenceTime = bin(OccurrenceTime, binval),ActionPlan=\"Timeline\");\r\nlet data=(\r\n    database('db').['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStart']\r\n    | distinct ActivityID,EventName,OccurrenceTime,FormattedMessage,ActionPlanName,ActionPlanInstanceId\r\n    | where ActionPlanName != \"TestControlPlane\"\r\n    | summarize OccurrenceTime=min(OccurrenceTime) by ActionPlanName,ActionPlanInstanceId\r\n    | extend OccurrenceTime=pack_array(OccurrenceTime, OccurrenceTime+1s),isActive=pack_array(tolong(0),tolong(1))\r\n    | mvexpand OccurrenceTime,isActive \r\n    | project ActionPlan=strcat(ActionPlanName,\" (\",ActionPlanInstanceId,\")\"),todatetime(OccurrenceTime),tolong(isActive),ActionPlanInstanceId,ActionplanInstanceID=ActionPlanInstanceId\r\n    | union (\r\n    database('db').['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStop']\r\n    | distinct ActivityID,EventName,OccurrenceTime,FormattedMessage,ActionPlanName,ActionPlanInstanceId\r\n    | summarize OccurrenceTime=max(OccurrenceTime) by ActionPlanName,ActionPlanInstanceId\r\n    | extend OccurrenceTime=pack_array(OccurrenceTime, OccurrenceTime+1s),isActive=pack_array(tolong(1),tolong(0))\r\n    | mvexpand OccurrenceTime,isActive\r\n    | project ActionPlan=strcat(ActionPlanName,\" (\",ActionPlanInstanceId,\")\"),todatetime(OccurrenceTime),tolong(isActive),ActionPlanInstanceId,ActionplanInstanceID=ActionPlanInstanceId\r\n    )\r\n);\r\nunion isfuzzy=true view,zeroTimeTable,data\r\n| sort by OccurrenceTime asc\r\n| project isActive,OccurrenceTime,ActionPlan | sort by OccurrenceTime asc "
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "ActionPlan_Step_Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "ECE-ActionPlan_Instances",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "90072637-bf8e-4e3c-8e60-7e6956e6e1a5",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(ActionplanInstanceID:string,ActionPlanName:string,startTime:datetime,endTime:datetime,IntermediateStatuses:dynamic,ProgressUpdateTime:datetime,LatestProgress:dynamic) [];\r\nunion isfuzzy=true view,(\r\n    database('db').['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStart']\r\n    | distinct ActivityID,EventName,OccurrenceTime,FormattedMessage,ActionPlanName,ActionPlanInstanceId\r\n    | union (\r\n        database('db').['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStop']\r\n        | distinct ActivityID,EventName,OccurrenceTime,FormattedMessage,ActionPlanName,ActionPlanInstanceId,ActionPlanStatus,ErrorMessage,CallStack,DrainErrorMessage\r\n    )\r\n    | order by OccurrenceTime asc\r\n    | extend statusHistory=strcat(tostring(OccurrenceTime),\" \",EventName,\" \",ActionPlanStatus)\r\n    | summarize startTime=min(OccurrenceTime),endTime=max(OccurrenceTime),FinalStatusTime=arg_max(OccurrenceTime,ActionPlanStatus),IntermediateStatuses=makelist(statusHistory) by ActionPlanInstanceId,ActionPlanName\r\n    | project ActionplanInstanceID=tostring(ActionPlanInstanceId),ActionPlanName,ActionPlanStatus,startTime,endTime,IntermediateStatuses\r\n    | sort by startTime asc\r\n    | join kind=leftouter (\r\n        database('db').['ETL-Microsoft.AzureStack.EnterpriseCloudEngine.EventSource.ActionPlanInstanceProgressUpdate']\r\n        | summarize (ProgressUpdateTime,LatestProgressXmlString)=argmax(OccurrenceTime,ProgressXmlString) by ActionplanInstanceID\r\n    ) on ActionplanInstanceID\r\n    | project ActionplanInstanceID,ActionPlanName,ActionPlanStatus,startTime,endTime,IntermediateStatuses,ProgressUpdateTime,LatestProgress=parse_xml(LatestProgressXmlString)\r\n    | extend ActionPlan=strcat(ActionPlanName,\" (\",ActionplanInstanceID,\")\")\r\n    | project-away ActionPlan\r\n)\r\n| order by startTime desc\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "ECE_ActionPlan_Instances"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "ECE-Timeline_logs",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "118cff65-6b9b-42f9-977a-4baf383360a7",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(count_:long,EventName:string,OccurrenceTime:datetime)[];\r\nlet containsValue=(value:string) { not(isempty(value)) and value<>\"<null>\" and value<>\"NULL\"};\r\nlet startTime=toscalar(union (database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine*']) | summarize min(OccurrenceTime));\r\nlet endTime=toscalar(union (database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.*']) | summarize max(OccurrenceTime));\r\nlet bintype = 10m;\r\nlet zeroTimeTable = (range x from 1 to 1 step 1 | mvexpand OccurrenceTime = range(startTime, endTime, bintype) to typeof(datetime));\r\nunion isfuzzy=true view,(\r\n    find withsource=source in (database('db').['ETL-Microsoft.AzureStack.EnterpriseCloudEngine.EventSource*'],database('db').['ETL-Microsoft-AzureStack-CloudEngine*'])\r\n     where \r\n         (\r\n            Success == 0\r\n            or FormattedMessage contains \"exception\"\r\n            or containsValue(ErrorMessage)\r\n            or containsValue(CallStack)\r\n         )\r\n        project ActivityID,ProviderName,EventName,OpcodeName,Level,FormattedMessage,MachineName,OccurrenceTime,FileName,AttemptedIngestTime,ActionplanInstanceID,pack(*)\r\n    | sort by OccurrenceTime asc\r\n    | project MachineName,ProviderName,EventName,OccurrenceTime\r\n    | distinct MachineName,ProviderName,EventName,OccurrenceTime\r\n    | union zeroTimeTable\r\n    | summarize count_=countif(not(isempty(EventName))) by bin(OccurrenceTime,bintype),EventName\r\n)\r\n| summarize avg(count_) by bin(OccurrenceTime, time(10m)),tostring(EventName) | sort by OccurrenceTime asc\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "ECE_Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      }
+    ],
+    "project": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342",
+    "context": {
+      "uiCron": {
+        "freq": "day",
+        "rate": 1,
+        "value": "0 1 21 */1 * *",
+        "isEntered": false,
+        "hourMins": 55,
+        "minuteSecs": 27,
+        "time": "2019-10-02T04:01:26.332Z",
+        "weekDays": [
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "monthDay": 1
+      },
+      "lensScenario": null,
+      "lensCreatedBy": "v-vasub",
+      "lensCreatedDate": "2019-10-01T21:44:32.8010783Z",
+      "lensModifiedBy": "v-vasub",
+      "lensModifiedDate": "2019-10-01T21:57:04.7742773Z"
+    },
+    "failureWebhook": {
+      "url": "https://lens.msftcloudes.com/share/jobnotificationemail",
+      "aadResource": "aa0c39bf-5086-4900-bf89-6404bff62cf8",
+      "aadTenant": "microsoft.onmicrosoft.com"
+    }
+  },
+  "createdBy": "v-vasub",
+  "createdDate": "2019-10-01T21:44:32.8010783Z",
+  "nextExecutionDate": "2019-10-03T21:01:00Z",
+  "modifiedBy": "v-vasub",
+  "modifiedDate": "2019-10-01T21:57:04.7742773Z",
+  "version": "2",
+  "isEnabled": true,
+  "isQuarantined": false,
+  "instances": [
+    {
+      "id": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342|0f4470255d214b259b43bdf684f398b6|T|2019-10-02T21:01:00.0000000Z",
+      "jobId": "0f4470255d214b259b43bdf684f398b6",
+      "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+      "status": "Succeeded",
+      "jobStatus": "0",
+      "errorMsg": null,
+      "createdDate": "2019-10-02T21:01:00Z",
+      "startTime": "2019-10-02T21:01:00Z",
+      "endTime": "2019-10-02T21:01:26Z",
+      "elapsedTime": "2019-10-03T00:00:25.8596227Z",
+      "seed": "2019-10-01T21:01:00Z",
+      "logLink": "https://analytics.applicationinsights.io/subscriptions/56dcf710-f955-442e-8ac2-3b90ab65dea1/resourcegroups/datastudioorchestrator/components/datastudiojobs?q=H4sIAAAAAAAEAFVQy07DMBC8I%2fEPe2siXOSEVhVI4cQF8To0PSPXXsAosY3t0Ebqx7NumpZKluzZ2Z3ZcWe0NZB5%2fOkwxJAzyBQ6NAqN1LjH0QuJAXaA20gEKIxCNwEqUL0RrZaZ6ZomT6O4legiKaZ25%2b03yghRtyQtWsfAOvQi8e%2bPigENI6loY9C3NsS6d8iAmoP4PCNehhIbrfPLix1svtDjmSJUFUzenlbrj5Ve2vmmmoCgfY%2f%2bcE8ri4ipkJW8uJ0WfMrLuizuOB1%2bPV8s%2bGx2c8U5ob3JmKEeM9C%2bRz0GS%2fxFr2P%2fTHdDVPiPGbwOAVNOBocQ1HVIyODh9JPDK%2bWyXqGHdQ8nT4VB%2fgE4gkzpqQEAAA%3d%3d&apptype=web",
+      "elapsedMilliseconds": 25859,
+      "parameters": {
+        "startDateTime": "2019-10-01T21:01:00Z",
+        "endDateTime": "2019-10-02T21:01:00Z"
+      },
+      "segments": [
+        {
+          "segmentId": "9ffe998f-0c97-41a6-8423-9582751b39a9",
+          "startTime": "2019-10-02T21:01:00.6238787Z",
+          "endTime": "2019-10-02T21:01:08.1467579Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "ActionPlan_Step_Timeline"
+        },
+        {
+          "segmentId": "90072637-bf8e-4e3c-8e60-7e6956e6e1a5",
+          "startTime": "2019-10-02T21:01:08.1780686Z",
+          "endTime": "2019-10-02T21:01:16.190759Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "ECE-ActionPlan_Instances"
+        },
+        {
+          "segmentId": "118cff65-6b9b-42f9-977a-4baf383360a7",
+          "startTime": "2019-10-02T21:01:16.2224451Z",
+          "endTime": "2019-10-02T21:01:23.2916405Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "ECE-Timeline_logs"
+        }
+      ],
+      "groupId": null
+    }
+  ],
+  "shareType": "shared",
+  "eTag": ""
+}

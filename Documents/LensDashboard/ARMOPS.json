@@ -1,0 +1,317 @@
+{
+  "id": "e3a661930be14d659f866bcaffb7d8d4",
+  "name": "ARMOPS",
+  "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+  "provider": "Dso",
+  "scenario": "",
+  "description": "",
+  "tags": "ScheduledExplore",
+  "config": {
+    "jobName": "e3a661930be14d659f866bcaffb7d8d4",
+    "jobDisplayName": "ARMOPS",
+    "jobDescription": "",
+    "tags": "ScheduledExplore",
+    "maxJobInstances": 1,
+    "isDebug": false,
+    "appendUtcIndicator": false,
+    "allocationType": 0,
+    "jobScheduleSettings": {
+      "scheduleType": "Frequency",
+      "frequencySettings": {
+        "cronSchedule": "0 40 22 */1 * *",
+        "backFill": false,
+        "monthly": false
+      }
+    },
+    "defaultICMAlerts": false,
+    "activities": [
+      {
+        "activityDisplayName": "ARMOperations",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "1c5347f8-124e-4da7-ad14-8bcdc25833ca",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxsize=192000000;let view=datatable(Endpoint:string,Subscription:string,ResourceGroup:string,Provider:string,CorrelationId:string,HttpMethod:string,TargetUri:string,OccurrenceTime:datetime,PrincipalOid:string,HttpStatusCode:int)[];\r\nalias database db = cluster('{cluster}').database('{database}');\r\nunion isfuzzy=true view,(\r\n    database('db').['ETL-Microsoft-AzureStack-Frontdoor.HttpIncomingRequestStart']\r\n    | distinct TargetUri,OperationName,HttpMethod,CorrelationId,OccurrenceTime\r\n    | join (\r\n        union database('db').['ETL-Microsoft-AzureStack-Frontdoor.HttpIncomingRequestEnd*']\r\n        | distinct TargetUri,OperationName,HttpMethod,CorrelationId,OccurrenceTime,PrincipalOid,HttpStatusCode\r\n    ) on TargetUri,OperationName,HttpMethod,CorrelationId\r\n    | project TargetUri,OperationName,HttpMethod,CorrelationId,OccurrenceTime,PrincipalOid,HttpStatusCode\r\n    | extend Endpoint=extract(@\"(?i)https(?-i)://([\\w.:-]*)/\",1,TargetUri)\r\n    | extend Subscription=extract(@\"/(?i)subscriptions(?-i)/([\\w-]*)[?/]\",1,TargetUri)\r\n    | extend ResourceGroup=extract(@\"/(?i)resourceGroups(?-i)/([\\w.-]*)[?/]\",1,TargetUri)\r\n    | extend Provider=extract(@\"/(?i)providers(?-i)/([\\w.-]*)[?/]\",1,TargetUri)\r\n    | project Endpoint,Subscription,ResourceGroup,Provider,CorrelationId,HttpMethod,TargetUri,OccurrenceTime,PrincipalOid,HttpStatusCode\r\n    | where HttpMethod <> \"GET\"\r\n)\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "xyz"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "ARMOps_Details",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "38508871-2f9e-42be-b553-c0651d9a80bd",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\ndatabase('db').['ETL-Microsoft-AzureStack-Frontdoor.HttpIncomingRequestStart'] \r\n| where HttpMethod <> \"GET\"\r\n| distinct EventName,TargetUri,OperationName,HttpMethod,CorrelationId,OccurrenceTime\r\n| extend Endpoint=extract(@\"(?i)https://([\\w.:-]*)/\",1,TargetUri)\r\n| extend Subscription=extract(@\"/(?i)subscriptions(?-i)/([\\w.-]*)[?/]\",1,TargetUri)\r\n| extend ResourceGroup=extract(@\"/(?i)resourceGroups(?-i)/([\\w.-]*)[?/]\",1,TargetUri)\r\n| extend Provider=extract(@\"/(?i)providers(?-i)/([\\w.-]*)[?/]\",1,TargetUri)\r\n| join kind=leftouter (union database('db').['ETL-Microsoft-AzureStack-Frontdoor.HttpIncomingRequestEnd*']\r\n    | project EventName,TargetUri,OperationName,HttpMethod,CorrelationId,OccurrenceTime,HttpStatusCode,PrincipalOid\r\n    | distinct EventName,TargetUri,OperationName,HttpMethod,CorrelationId,OccurrenceTime,HttpStatusCode,PrincipalOid)\r\n    on TargetUri,CorrelationId,OperationName,HttpMethod\r\n| project OccurrenceTime,TargetUri,OperationName,HttpMethod,CorrelationId,Duration=OccurrenceTime1-OccurrenceTime,HttpStatusCode,Endpoint,Subscription,ResourceGroup,Provider,PrincipalOid\r\n| join kind=leftouter (union database('db').['ETL-Microsoft-AzureStack-Frontdoor.HttpOutgoingRequestEnd*']\r\n        | project EventName,TargetUri,OperationName,HttpMethod,CorrelationId,OccurrenceTime,HttpStatusCode,DurationInMilliseconds,ClientRequestId\r\n        | distinct EventName,TargetUri,OperationName,HttpMethod,CorrelationId,OccurrenceTime,HttpStatusCode,DurationInMilliseconds,ClientRequestId\r\n        | extend OperationInfo=pack(\"HttpStatusCode\",HttpStatusCode,\"OperationName\",OperationName,\"HttpMethod\",HttpMethod,\"TargetUri\",TargetUri,\"OccurrenceTime\",OccurrenceTime,\"ClientRequestId\",ClientRequestId,\"DurationInMilliseconds\",DurationInMilliseconds)\r\n        | order by OccurrenceTime asc\r\n        | project EventName,OperationInfo,CorrelationId\r\n        | summarize FailureCount=countif(EventName contains \"fail\"),InternalOperations=makeset(OperationInfo) by CorrelationId\r\n) on CorrelationId\r\n| project OccurrenceTime,CorrelationId,Duration,FailedJobs=iff(isempty(FailureCount),0,FailureCount),HttpMethod,HttpStatusCode,TargetUri,Endpoint,Subscription,ResourceGroup,Provider,PrincipalOid,InternalOperations\r\n| extend Cluster = 'masvaas'\r\n| extend Database = 'TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33'\r\n| order by OccurrenceTime asc\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "zyx"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "ARMOps-Subscription_Principal_count",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "c12d0a5a-67c8-4071-9ea4-3f8d3b1ea1ab",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nlet view=datatable(Subscriptions:long,PrincipalOids:long)[];\r\nalias database db = cluster('{cluster}').database('{database}');\r\nunion isfuzzy=true view,(\r\n    database('db').['ETL-Microsoft-AzureStack-Frontdoor.HttpIncomingRequestStart']\r\n    | distinct TargetUri,OperationName,HttpMethod,CorrelationId,OccurrenceTime\r\n    | join (\r\n        union database('db').['ETL-Microsoft-AzureStack-Frontdoor.HttpIncomingRequestEnd*']\r\n        | distinct TargetUri,OperationName,HttpMethod,CorrelationId,OccurrenceTime,PrincipalOid,HttpStatusCode\r\n    ) on TargetUri,OperationName,HttpMethod,CorrelationId\r\n    | project TargetUri,OperationName,HttpMethod,CorrelationId,OccurrenceTime,PrincipalOid,HttpStatusCode\r\n    | extend Endpoint=extract(@\"(?i)https(?-i)://([\\w.:-]*)/\",1,TargetUri)\r\n    | extend Subscription=extract(@\"/(?i)subscriptions(?-i)/([\\w-]*)[?/]\",1,TargetUri)\r\n    | extend ResourceGroup=extract(@\"/(?i)resourceGroups(?-i)/([\\w.-]*)[?/]\",1,TargetUri)\r\n    | extend Provider=extract(@\"/(?i)providers(?-i)/([\\w.-]*)[?/]\",1,TargetUri)\r\n    | project Endpoint,Subscription,ResourceGroup,Provider,CorrelationId,HttpMethod,TargetUri,OccurrenceTime,PrincipalOid,HttpStatusCode\r\n    | where HttpMethod <> \"GET\"\r\n    | summarize Subscriptions=dcount(Subscription),PrincipalOids=dcount(PrincipalOid)\r\n)\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "ARmOps_Subscription_Principal_Count"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      }
+    ],
+    "project": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342",
+    "context": {
+      "uiCron": {
+        "freq": "day",
+        "rate": 1,
+        "value": "0 40 22 */1 * *",
+        "isEntered": false,
+        "hourMins": 13,
+        "minuteSecs": 41,
+        "time": "2019-10-01T05:40:15.515Z",
+        "weekDays": [
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "monthDay": 1
+      },
+      "lensScenario": null,
+      "lensCreatedBy": "v-vasub",
+      "lensCreatedDate": "2019-09-30T22:46:17.6827993Z",
+      "lensModifiedBy": "v-vasub",
+      "lensModifiedDate": "2019-10-01T20:05:44.7985835Z"
+    },
+    "failureWebhook": {
+      "url": "https://lens.msftcloudes.com/share/jobnotificationemail",
+      "aadResource": "aa0c39bf-5086-4900-bf89-6404bff62cf8",
+      "aadTenant": "microsoft.onmicrosoft.com"
+    }
+  },
+  "createdBy": "v-vasub",
+  "createdDate": "2019-09-30T22:46:17.6827993Z",
+  "nextExecutionDate": "2019-10-03T22:40:00Z",
+  "modifiedBy": "v-vasub",
+  "modifiedDate": "2019-10-01T20:05:44.7985835Z",
+  "version": "11",
+  "isEnabled": true,
+  "isQuarantined": false,
+  "instances": [
+    {
+      "id": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342|e3a661930be14d659f866bcaffb7d8d4|T|2019-10-02T22:40:00.0000000Z",
+      "jobId": "e3a661930be14d659f866bcaffb7d8d4",
+      "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+      "status": "Succeeded",
+      "jobStatus": "0",
+      "errorMsg": null,
+      "createdDate": "2019-10-02T22:40:01Z",
+      "startTime": "2019-10-02T22:40:02Z",
+      "endTime": "2019-10-02T22:41:50Z",
+      "elapsedTime": "2019-10-03T00:01:48.5870333Z",
+      "seed": "2019-10-01T22:40:00Z",
+      "logLink": "https://analytics.applicationinsights.io/subscriptions/56dcf710-f955-442e-8ac2-3b90ab65dea1/resourcegroups/datastudioorchestrator/components/datastudiojobs?q=H4sIAAAAAAAEAFWQQU%2fDMAyF70j8B9%2fWigzSbkJsUjlNSJOAC5U4oiyxIChNQ5KyVdqPx1nXjZ0S%2bznv%2bUtndWsh8%2fjTYYghZ5ApdGgVWqnxUEcvJAbYA%2b4iCaAwCm0CVKB6KxotM9sZk6enuJPoIjmmcefbb5QRom7IWjSOQevQi6R%2frBUDeozkoq1F37Qh1r1DBjQcxOeF8DK02BidX1%2ftYfuFHi8coapg8nS3QfNu1vPVtpqAoH1P%2bfBIK4uIqZGVvFhMCz7lZV2Wyzlf8uL2flE%2bzPjshlPFDyEjQz0y0L4nPwZv%2bItex%2f6ZTkNS%2bF8zeB0AEyeDIwRNHQkZrM4%2fOdwSV%2bsVetj0cM5UGOQfkM%2fRZKkBAAA%3d&apptype=web",
+      "elapsedMilliseconds": 108587,
+      "parameters": {
+        "startDateTime": "2019-10-01T22:40:00Z",
+        "endDateTime": "2019-10-02T22:40:00Z"
+      },
+      "segments": [
+        {
+          "segmentId": "1c5347f8-124e-4da7-ad14-8bcdc25833ca",
+          "startTime": "2019-10-02T22:40:02.6426402Z",
+          "endTime": "2019-10-02T22:40:31.7784125Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "ARMOperations"
+        },
+        {
+          "segmentId": "38508871-2f9e-42be-b553-c0651d9a80bd",
+          "startTime": "2019-10-02T22:40:31.9815432Z",
+          "endTime": "2019-10-02T22:41:32.8467021Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "ARMOps_Details"
+        },
+        {
+          "segmentId": "c12d0a5a-67c8-4071-9ea4-3f8d3b1ea1ab",
+          "startTime": "2019-10-02T22:41:33.0498328Z",
+          "endTime": "2019-10-02T22:41:50.0159202Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "ARMOps-Subscription_Principal_count"
+        }
+      ],
+      "groupId": null
+    },
+    {
+      "id": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342|e3a661930be14d659f866bcaffb7d8d4|T|2019-10-01T22:40:00.0000000Z",
+      "jobId": "e3a661930be14d659f866bcaffb7d8d4",
+      "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+      "status": "Succeeded",
+      "jobStatus": "0",
+      "errorMsg": null,
+      "createdDate": "2019-10-01T22:40:00Z",
+      "startTime": "2019-10-01T22:40:01Z",
+      "endTime": "2019-10-01T22:41:29Z",
+      "elapsedTime": "2019-10-03T00:01:28.8543295Z",
+      "seed": "2019-09-30T22:40:00Z",
+      "logLink": "https://analytics.applicationinsights.io/subscriptions/56dcf710-f955-442e-8ac2-3b90ab65dea1/resourcegroups/datastudioorchestrator/components/datastudiojobs?q=H4sIAAAAAAAEAFWQzU7DMBCE70i8w96aCJc6UfhppSAh9YIESNDckbFXxSixg%2b1Ag%2frwrJumpSd7d9Yz%2b7kz2hpIHH516INPGSQKWzQKjdS4q4MTEj1sATeBBFAYhK49lKB6IxotE9PVdRqf4kZiG8gxjrfOfqIMEHRD1qJpGdgWnYj624NiQI%2bRXLQx6BrrQ9W3yICGvVifCE9Di43R6fnZFn4%2b0OGJI5QlTOSrDb%2bz5f1s%2fVJOQNC%2bh3y4o5VFwNhIcp7Npxmf8qzK80XBF5xfFte3VzfF%2fILHahcyMlQjA%2b178GOwwm90OvSPdNYk%2bf81g%2bcBMHIy2EPQ1J6QwfL4k8Mtclmn0MF7D8dMhV7%2bAWzFlXapAQAA&apptype=web",
+      "elapsedMilliseconds": 88854,
+      "parameters": {
+        "startDateTime": "2019-09-30T22:40:00Z",
+        "endDateTime": "2019-10-01T22:40:00Z"
+      },
+      "segments": [
+        {
+          "segmentId": "1c5347f8-124e-4da7-ad14-8bcdc25833ca",
+          "startTime": "2019-10-01T22:40:01.1560822Z",
+          "endTime": "2019-10-01T22:40:20.9421994Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "ARMOperations"
+        },
+        {
+          "segmentId": "38508871-2f9e-42be-b553-c0651d9a80bd",
+          "startTime": "2019-10-01T22:40:21.1453173Z",
+          "endTime": "2019-10-01T22:41:15.0960714Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "ARMOps_Details"
+        },
+        {
+          "segmentId": "c12d0a5a-67c8-4071-9ea4-3f8d3b1ea1ab",
+          "startTime": "2019-10-01T22:41:15.2991951Z",
+          "endTime": "2019-10-01T22:41:25.6435471Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "ARMOps-Subscription_Principal_count"
+        }
+      ],
+      "groupId": null
+    },
+    {
+      "id": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342|e3a661930be14d659f866bcaffb7d8d4|M|2019-10-01T17:08:18.6596038Z",
+      "jobId": "e3a661930be14d659f866bcaffb7d8d4",
+      "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+      "status": "Succeeded",
+      "jobStatus": "0",
+      "errorMsg": null,
+      "createdDate": "2019-10-01T17:08:18Z",
+      "startTime": "2019-10-01T17:08:18Z",
+      "endTime": "2019-10-01T17:09:53Z",
+      "elapsedTime": "2019-10-03T00:01:35.2723812Z",
+      "seed": "2019-09-29T22:40:00Z",
+      "logLink": "https://analytics.applicationinsights.io/subscriptions/56dcf710-f955-442e-8ac2-3b90ab65dea1/resourcegroups/datastudioorchestrator/components/datastudiojobs?q=H4sIAAAAAAAEAFWQMU%2fDMBCFdyT%2bw21NhItsUEMaKQyIBQlYyI6MfQKjxHZtBxqpP55L07R0su%2fe%2bb373FvjLGQBNz3GFHMGmUaPVqNVBvd1ClJhhB3gNpEAGpM0bYQa9GBlZ1Rm%2b7bNx6e4VegTOY7jPrhvVAmS6chadp6B8xjkqL8%2faQb0GMnFWIuhczE1g0cGNBzl55nwMrXYHJ1fXuzg9wsDnjlCXcNCc%2fFg%2bmKz4q5egKR9j%2flwTyvLhGMju%2bFivRR8yUUj7ipeVqK8Llbrgt%2bWV5xXnO9DZoZmZqB9j34M3vAHg0nDM50tSfF%2fzeB1Ahw5GRwgaOpAyODx9JPTbeRyQWOAjwFOmRqj%2bgMfvVTGqQEAAA%3d%3d&apptype=web",
+      "elapsedMilliseconds": 95272,
+      "parameters": {
+        "startDateTime": "2019-09-29T22:40:00Z",
+        "endDateTime": "2019-09-30T22:40:00Z"
+      },
+      "segments": [
+        {
+          "segmentId": "1c5347f8-124e-4da7-ad14-8bcdc25833ca",
+          "startTime": "2019-10-01T17:08:18.7065028Z",
+          "endTime": "2019-10-01T17:08:59.0139508Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-IBU-TestPass-MAS_Prod_1.1906.0.30-20190719100019-2112bf77-eb21-4fd6-8883-a5274eedc5d2"
+          },
+          "segmentName": "Process data"
+        },
+        {
+          "segmentId": "38508871-2f9e-42be-b553-c0651d9a80bd",
+          "startTime": "2019-10-01T17:08:59.0451982Z",
+          "endTime": "2019-10-01T17:09:41.3614859Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Process data"
+        },
+        {
+          "segmentId": "c12d0a5a-67c8-4071-9ea4-3f8d3b1ea1ab",
+          "startTime": "2019-10-01T17:09:41.3927358Z",
+          "endTime": "2019-10-01T17:09:51.224787Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Process data"
+        }
+      ],
+      "groupId": null
+    }
+  ],
+  "shareType": "shared",
+  "eTag": ""
+}

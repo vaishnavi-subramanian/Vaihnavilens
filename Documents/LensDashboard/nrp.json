@@ -1,0 +1,160 @@
+{
+  "id": "227abfc4850548d4955c08cd0b20bf80",
+  "name": "NRP",
+  "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+  "provider": "Dso",
+  "scenario": "",
+  "description": "",
+  "tags": "",
+  "config": {
+    "jobName": "227abfc4850548d4955c08cd0b20bf80",
+    "jobDisplayName": "NRP",
+    "jobDescription": "",
+    "tags": "",
+    "maxJobInstances": 1,
+    "isDebug": false,
+    "appendUtcIndicator": false,
+    "allocationType": 0,
+    "jobScheduleSettings": {
+      "scheduleType": "Frequency",
+      "frequencySettings": {
+        "cronSchedule": "0 30 17 */1 * *",
+        "backFill": false,
+        "monthly": false
+      }
+    },
+    "defaultICMAlerts": false,
+    "activities": [
+      {
+        "activityDisplayName": "NRP Frontend Top Operations",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "4577e8a3-6602-4bb8-a869-a26702c5fd53",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\ndatabase('db').['ETL-Microsoft-AzureStack-Services-Network.LogFrontendOperationEvent']\r\n| summarize OperationName=any(OperationName),OccurrenceTime=max(OccurrenceTime), DurationMs=(max(OccurrenceTime)-min(OccurrenceTime))/1ms, isSuccess=countif(EventCode==\"BackgroundTaskFailed\")==0 by OperationId\r\n| project OccurrenceTime,OperationName,DurationMs,isSuccess\r\n| summarize Count=count() by OperationName\r\n| sort by Count desc\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "NRP Frontend Top Operations"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "NRP Frontend Throughput and avg duration",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "daabase",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "d23daac8-fff3-4b6b-b3ec-9a304d3c7e5d",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxsize=192000000;alias database db = cluster('{cluster}').database('{database}');\r\nlet startTime = toscalar(database(\"db\").['ETL-Microsoft-AzureStack-Services-Network.LogFrontendOperationEvent'] | summarize min(OccurrenceTime));\r\nlet endTime = toscalar(database(\"db\").['ETL-Microsoft-AzureStack-Services-Network.LogFrontendOperationEvent'] | summarize max(OccurrenceTime));\r\nlet binval = 1h;\r\nlet zeroTimeTable =  (range x from 1 to 1 step 1 | mvexpand OccurrenceTime = range(startTime, endTime, binval) to typeof(datetime));\r\ndatabase('db').['ETL-Microsoft-AzureStack-Services-Network.LogFrontendOperationEvent']\r\n| summarize OccurrenceTime=max(OccurrenceTime), DurationMs=(max(OccurrenceTime)-min(OccurrenceTime))/1ms, isSuccess=countif(EventCode==\"BackgroundTaskFailed\")==0 by OperationId\r\n| project OccurrenceTime, DurationMs, isSuccess, isValue=true\r\n| union zeroTimeTable\r\n| summarize \r\n    Succeeded=countif(isValue==true and isSuccess==true), \r\n    Failed=countif(isValue==true and isSuccess==false),\r\n    AvgDuration=avg(DurationMs) by bin(OccurrenceTime, binval)"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "NRP Frontend Throughput and avg duration"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "NRP Frontend Errors",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "c4f9daa0-92ea-4547-9062-1f7dcf8d9327",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\ndatabase('db').['ETL-Microsoft-AzureStack-Services-Network.LogFrontendOperationEvent']\r\n| where EventCode == \"BackgroundTaskFailed\"\r\n| distinct OccurrenceTime,OperationName,OperationId,ResourceType,ResourceName,CorrelationRequestId,Message\r\n| project OperationName,OperationId,ResourceType,ResourceName,Troubleshoot=\"Troubleshoot\",FullSearch=\"Full Search\",CorrelationId=CorrelationRequestId,Message\r\n| extend Cluster='{cluster}', Database='{database}'\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "NRP Frontend Errors"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      }
+    ],
+    "project": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342",
+    "context": {
+      "uiCron": {
+        "freq": "day",
+        "rate": 1,
+        "value": "0 30 17 */1 * *",
+        "isEntered": false,
+        "hourMins": 26,
+        "minuteSecs": 29,
+        "time": "2019-10-04T00:30:20.585Z",
+        "weekDays": [
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "monthDay": 1
+      },
+      "lensScenario": null,
+      "lensCreatedBy": "v-vasub",
+      "lensCreatedDate": "2019-10-03T17:33:30.952943Z",
+      "lensModifiedBy": "v-vasub",
+      "lensModifiedDate": "2019-10-03T18:02:28.2927448Z"
+    },
+    "failureWebhook": {
+      "url": "https://lens.msftcloudes.com/share/jobnotificationemail",
+      "aadResource": "aa0c39bf-5086-4900-bf89-6404bff62cf8",
+      "aadTenant": "microsoft.onmicrosoft.com"
+    }
+  },
+  "createdBy": "v-vasub",
+  "createdDate": "2019-10-03T17:33:30.952943Z",
+  "nextExecutionDate": "2019-10-04T17:30:00Z",
+  "modifiedBy": "v-vasub",
+  "modifiedDate": "2019-10-03T18:02:28.2927448Z",
+  "version": "3",
+  "isEnabled": true,
+  "isQuarantined": false,
+  "instances": [],
+  "shareType": "shared",
+  "eTag": ""
+}

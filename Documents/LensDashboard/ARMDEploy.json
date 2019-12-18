@@ -1,0 +1,213 @@
+{
+  "id": "826743431e014fbb8eecbd0ad6729c7b",
+  "name": "ARMDeploy",
+  "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+  "provider": "Dso",
+  "scenario": "",
+  "description": "",
+  "tags": "",
+  "config": {
+    "jobName": "826743431e014fbb8eecbd0ad6729c7b",
+    "jobDisplayName": "ARMDeploy",
+    "jobDescription": "",
+    "tags": "",
+    "maxJobInstances": 1,
+    "isDebug": false,
+    "appendUtcIndicator": false,
+    "allocationType": 0,
+    "jobScheduleSettings": {
+      "scheduleType": "Frequency",
+      "frequencySettings": {
+        "cronSchedule": "0 59 21 */1 * *",
+        "backFill": false,
+        "monthly": false
+      }
+    },
+    "defaultICMAlerts": false,
+    "activities": [
+      {
+        "activityDisplayName": "ARM_Deployments",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "6e8deb5e-4ae0-4c0b-8d72-db10bf9965a2",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33');\r\ndatabase('db').['ETL-Microsoft-AzureStack-Frontdoor.DeploymentOperations']\r\n| distinct OccurrenceTime,DurationInMilliseconds,ExecutionStatus,ProviderNamespace,ResourceType\r\n| top-nested  of bin(OccurrenceTime, time(10m)) by count(),top-nested 5 of ExecutionStatus by count() desc,top-nested  of ProviderNamespace by count_=count() desc | sort by OccurrenceTime asc | project OccurrenceTime,ExecutionStatus,ProviderNamespace,count_"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "ARM_Deployments"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "ARM_Deployment_Failures",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "2877a4d6-291b-46d0-b29d-332cd15ba6dd",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\ndatabase('db').['ETL-Microsoft-AzureStack-Frontdoor.DeploymentOperations']\r\n| where ExecutionStatus==\"Failed\"\r\n| distinct OccurrenceTime,CorrelationId,ResourceGroupName,DeploymentName,ProviderNamespace,ResourceType,ResourceName\r\n| project CorrelationId,Troubleshoot=\"Troubleshoot\",FullSearch=\"Full Search\",ResourceGroupName,DeploymentName,ProviderNamespace,ResourceType,ResourceName\r\n| extend Cluster='{masvaas}', Database='{database}'\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "ARM_Deployment_Failures"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "ARM_Provider_Error_Detail",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "cfc9f565-e00b-4d6e-bd80-ef0f0e0acc7a",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view=view(){ range x from 0 to 0 step 1 | extend OccurrenceTime=now(),CorrelationId=\"\",Troubleshoot=\"Troubleshoot\",FullSearch=\"Full Search\",OperationName=\"\",ProviderNamespace=\"\",ResourceType=\"\",Message=\"\",Exception=\"\"};\r\nunion isfuzzy=true view,( \r\n    database('db').['ETL-Microsoft-AzureStack-Frontdoor.ProviderError']\r\n    | distinct OccurrenceTime,SubscriptionId,CorrelationId,OperationName,ProviderNamespace,ResourceType,Message,Exception\r\n    | project OccurrenceTime,CorrelationId,Troubleshoot=\"Troubleshoot\",FullSearch=\"Full Search\",OperationName,ProviderNamespace,ResourceType,Message,Exception\r\n    )\r\n| where isempty(ProviderNamespace)==false\r\n| extend Cluster='{cluster}', Database='{database}'"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "ARM_Provider_Error_Detail"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      }
+    ],
+    "project": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342",
+    "context": {
+      "uiCron": {
+        "freq": "day",
+        "rate": 1,
+        "value": "0 59 21 */1 * *",
+        "isEntered": false,
+        "hourMins": 3,
+        "minuteSecs": 28,
+        "time": "2019-10-02T04:59:23.179Z",
+        "weekDays": [
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "monthDay": 1
+      },
+      "lensScenario": null,
+      "lensCreatedBy": "v-vasub",
+      "lensCreatedDate": "2019-10-01T22:12:14.5911785Z",
+      "lensModifiedBy": "v-vasub",
+      "lensModifiedDate": "2019-10-01T22:17:55.8029587Z"
+    },
+    "failureWebhook": {
+      "url": "https://lens.msftcloudes.com/share/jobnotificationemail",
+      "aadResource": "aa0c39bf-5086-4900-bf89-6404bff62cf8",
+      "aadTenant": "microsoft.onmicrosoft.com"
+    }
+  },
+  "createdBy": "v-vasub",
+  "createdDate": "2019-10-01T22:12:14.5911785Z",
+  "nextExecutionDate": "2019-10-03T21:59:00Z",
+  "modifiedBy": "v-vasub",
+  "modifiedDate": "2019-10-01T22:17:55.8029587Z",
+  "version": "2",
+  "isEnabled": true,
+  "isQuarantined": false,
+  "instances": [
+    {
+      "id": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342|826743431e014fbb8eecbd0ad6729c7b|T|2019-10-02T21:59:00.0000000Z",
+      "jobId": "826743431e014fbb8eecbd0ad6729c7b",
+      "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+      "status": "Succeeded",
+      "jobStatus": "0",
+      "errorMsg": null,
+      "createdDate": "2019-10-02T21:59:00Z",
+      "startTime": "2019-10-02T21:59:00Z",
+      "endTime": "2019-10-02T21:59:25Z",
+      "elapsedTime": "2019-10-03T00:00:24.8588286Z",
+      "seed": "2019-10-01T21:59:00Z",
+      "logLink": "https://analytics.applicationinsights.io/subscriptions/56dcf710-f955-442e-8ac2-3b90ab65dea1/resourcegroups/datastudioorchestrator/components/datastudiojobs?q=H4sIAAAAAAAEAFWQzU7DMBCE70i8w96aCLeyg%2fhppXBCSEiUCxFX5Nor6ipxjO3QRurDs26alp7s3VnP7OfOmtZC5vGnwxBDziDT6NBqtMrgoY5eKgywB9xFEkBjlKYOUILurWyMymxX13l6ijuFLpJjGne%2b3aCKEE1D1rJxDFqHXib961UzoMdILsZa9E0bYtU7ZEDDQX5fCMuhxcbo%2fPpqD9s1erxwhLKEyfJFuM%2bHjVpteTkBSfue8uGJVpYRUyMruJhPBZ%2fyoirE4m6%2b4Hx2L3hx%2byhuOKfqEDIyVCMD7XvyY%2fCBv%2bhN7N%2forEkK%2f2sG7wNg4mRwhKCpIyGD5%2fNPDrfE1XqNHlY9nDM1BvUHT3iUgqkBAAA%3d&apptype=web",
+      "elapsedMilliseconds": 24858,
+      "parameters": {
+        "startDateTime": "2019-10-01T21:59:00Z",
+        "endDateTime": "2019-10-02T21:59:00Z"
+      },
+      "segments": [
+        {
+          "segmentId": "6e8deb5e-4ae0-4c0b-8d72-db10bf9965a2",
+          "startTime": "2019-10-02T21:59:00.6883348Z",
+          "endTime": "2019-10-02T21:59:08.4284563Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "ARM_Deployments"
+        },
+        {
+          "segmentId": "2877a4d6-291b-46d0-b29d-332cd15ba6dd",
+          "startTime": "2019-10-02T21:59:08.4599846Z",
+          "endTime": "2019-10-02T21:59:15.5761984Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "ARM_Deployment_Failures"
+        },
+        {
+          "segmentId": "cfc9f565-e00b-4d6e-bd80-ef0f0e0acc7a",
+          "startTime": "2019-10-02T21:59:15.6074045Z",
+          "endTime": "2019-10-02T21:59:22.585634Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "ARM_Provider_Error_Detail"
+        }
+      ],
+      "groupId": null
+    }
+  ],
+  "shareType": "shared",
+  "eTag": ""
+}

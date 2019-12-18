@@ -1,0 +1,798 @@
+{
+  "id": "5285752163894ae1ad04fb2c349a2f56",
+  "name": "PNUSWAT-ControlPath",
+  "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+  "provider": "Dso",
+  "scenario": "",
+  "description": "",
+  "tags": "",
+  "config": {
+    "jobName": "5285752163894ae1ad04fb2c349a2f56",
+    "jobDisplayName": "PNUSWAT-ControlPath",
+    "jobDescription": "",
+    "tags": "",
+    "maxJobInstances": 1,
+    "isDebug": false,
+    "appendUtcIndicator": false,
+    "allocationType": 0,
+    "jobScheduleSettings": {
+      "scheduleType": "Frequency",
+      "frequencySettings": {
+        "cronSchedule": "0 17 18 */1 * *",
+        "backFill": false,
+        "monthly": false
+      }
+    },
+    "defaultICMAlerts": false,
+    "activities": [
+      {
+        "activityDisplayName": "Uptime - ARM Success Rate",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "969c924b-cb3d-413c-81e6-ed246ba7d343",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet schema=datatable(ServerFailRate:real,PassRate:real,Total:long)[];\r\nlet opRegex = \"([^/]+)/?.*/PROVIDERS/([^/]+)/(.*[^/])/?\";\r\nlet extractOperation = (s:string) { extract(opRegex, 1 , s) };\r\nlet extractResourceProvider = (s:string) { extract(opRegex, 2 , s) };\r\nlet extractResourceType = (s:string) { extract(opRegex, 3 , s) };\r\nlet filterOperation = (s:string) { s contains \"PROVIDERS\" };\r\nlet isSuccess = (i:int) { i/100 == 2 };\r\nlet isARMSuccess = (i:int,s:string) { iif(i/100 == 5 and s == 'gateway',false,true) };\r\nlet isARMFailure = (i:int,s:string) { i/100 == 5 and s == 'gateway' };\r\nlet isClientFailure = (i:int) { i/100 == 4 };\r\nunion isfuzzy=true schema,(\r\n    union database(\"db\").[\"ETL-Microsoft-AzureStack-Frontdoor.HttpIncomingRequestEndWith*\"]\r\n    | where filterOperation(OperationName) and HttpStatusCode != 404\r\n    | project HttpStatusCode,FailureCause\r\n    | summarize Total = count(),\r\n        ServerFail = countif(isARMFailure(HttpStatusCode,FailureCause)),\r\n        ClientFail = countif(isClientFailure(HttpStatusCode)),\r\n        ARMSuccess = countif(isARMSuccess(HttpStatusCode,FailureCause)),\r\n        Pass = countif(isSuccess(HttpStatusCode))\r\n    | project PassRate=toreal(ARMSuccess)/toreal(Total),ServerFailRate=toreal(ServerFail)/toreal(Total),Total, ClientFailRate=toreal(ClientFail)/toreal(Total) \r\n)\r\n| project Total,PassRate,ClientFailRate,ServerFailRate"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Timeseries",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Uptime - ARM Success Rate"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Uptime - ARM Failure Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "7806c904-b70d-4a2f-b3bf-e0057536a17c",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(OccurrenceTime:datetime,Pass:long,ClientFail:long,ServerFail:long,ResourceProvider:string,Operation:string,ResourceType:string,Reliability:real)[];\r\nlet startTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStart'] | summarize min(OccurrenceTime));\r\nlet endTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStop'] | summarize max(OccurrenceTime));\r\nlet binval = 5m;\r\nlet zeroTimeTable =  (range Succeeded from 0 to 0 step 1\r\n    | mvexpand OccurrenceTime = range(startTime-binval, endTime+binval, binval) to typeof(datetime) limit 65536\r\n    | extend OccurrenceTime = bin(OccurrenceTime, binval));\r\nlet opRegex = \"([^/]+)/?.*/PROVIDERS/([^/]+)/(.*[^/])/?\";\r\nlet extractOperation = (s:string) { extract(opRegex, 1 , s) };\r\nlet extractResourceProvider = (s:string) { extract(opRegex, 2 , s) };\r\nlet extractResourceType = (s:string) { extract(opRegex, 3 , s) };\r\nlet filterOperation = (s:string) { s contains \"PROVIDERS\" };\r\nlet isSuccess = (i:int) { i/100 == 2 };\r\nlet isARMSuccess = (i:int,s:string) { iif(i/100 == 5 and s == 'gateway',false,true) };\r\nlet isServerFailure = (i:int) { i/100 == 5 };\r\nlet isClientFailure = (i:int) { i/100 == 4 };\r\nunion isfuzzy=true view,zeroTimeTable,(\r\n    union database(\"db\").[\"ETL-Microsoft-AzureStack-Frontdoor.HttpIncomingRequestEndWith*\"]\r\n    | where OccurrenceTime > startTime and OccurrenceTime < endTime\r\n    | where filterOperation(OperationName)\r\n    | project HttpStatusCode, DurationInMilliseconds, OperationName,OccurrenceTime,FailureCause\r\n    | summarize count() by OperationName,HttpStatusCode,FailureCause,bin(OccurrenceTime,binval)\r\n    | summarize Total = sum(count_),\r\n        ARMSuccess = sumif(count_,isARMSuccess(HttpStatusCode,FailureCause)),\r\n        ServerFail = sumif(count_,isServerFailure(HttpStatusCode)),\r\n        ClientFail = sumif(count_,isClientFailure(HttpStatusCode)),\r\n        Pass = sumif(count_,isSuccess(HttpStatusCode)),\r\n        StatusCodeCounts = makelist(pack(\"StatusCode\",HttpStatusCode,\"Count\",count_))\r\n        by OperationName,bin(OccurrenceTime,binval)\r\n    | project \r\n        ResourceProvider = extractResourceProvider(OperationName),\r\n        Operation = extractOperation(OperationName), \r\n        ResourceType = extractResourceType(OperationName),\r\n        ServerFail,ClientFail,Pass,OccurrenceTime,Reliability=toreal(ARMSuccess)/toreal(Total)\r\n)\r\n| summarize avg(Reliability) by bin(OccurrenceTime, time(1m)) | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Uptime - ARM Failure Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Uptime - ARM Operations with failure count",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "0e2b9fc8-bb1a-4567-87e2-2eb371218f3b",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet schema=datatable(ServerFail:long,OperationName:string,Total:long,StatusCodeCounts:dynamic)[];\r\nlet filterOperation = (s:string) { s contains \"PROVIDERS\" };\r\nlet isSuccess = (i:int) { i/100 == 2 };\r\nlet isServerFailure = (i:int,s:string) { i/100 == 5 and s == 'gateway' };\r\nlet isClientFailure = (i:int) { i/100 == 4 };\r\nunion isfuzzy=true schema,(\r\n    union database(\"db\").[\"ETL-Microsoft-AzureStack-Frontdoor.HttpIncomingRequestEndWith*\"]\r\n    | where filterOperation(OperationName)\r\n    | project HttpStatusCode, DurationInMilliseconds, OperationName, ApiVersion\r\n    | summarize count() by OperationName,HttpStatusCode\r\n    | summarize Total = sum(count_),\r\n        ServerFail = sumif(count_,isServerFailure(HttpStatusCode)),\r\n        Pass = sumif(count_,isSuccess(HttpStatusCode)),\r\n        StatusCodeCounts = makelist(pack(\"StatusCode\",HttpStatusCode,\"Count\",count_))\r\n        by OperationName\r\n    | project ServerFail,OperationName,Total,StatusCodeCounts  \r\n    | where ServerFail > 0\r\n    | sort by ServerFail desc \r\n)\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Uptime - ARM Operations with failure count"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Uptime - CRP Success Rate",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "933b4a58-55cd-40b0-adc2-f607ecd2e85c",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet schema=datatable(ServerFailRate:real,ClientFailRate:real,PassRate:real,Total:long)[];\r\nlet opRegex = \"([^/]+)/?.*/PROVIDERS/([^/]+)/(.*[^/])/?\";\r\nlet extractOperation = (s:string) { extract(opRegex, 1 , s) };\r\nlet extractResourceProvider = (s:string) { extract(opRegex, 2 , s) };\r\nlet extractResourceType = (s:string) { extract(opRegex, 3 , s) };\r\nlet filterOperation = (s:string) { s contains \"PROVIDERS\" };\r\nlet isSuccess = (i:int) { i/100 == 2 or i == 404 };\r\nlet isServerFailure = (i:int) { i/100 == 5 };\r\nlet isClientFailure = (i:int) { i != 404 and i/100 == 4 };\r\nunion isfuzzy=true schema,(\r\n    union database(\"db\").[\"ETL-Microsoft-AzureStack-Frontdoor.HttpIncomingRequestEndWith*\"]\r\n    | where filterOperation(OperationName)\r\n    | where extractResourceProvider(OperationName) == 'MICROSOFT.COMPUTE'\r\n    | project HttpStatusCode\r\n    | summarize Total = count(),\r\n        ServerFail = countif(isServerFailure(HttpStatusCode)),\r\n        ClientFail = countif(isClientFailure(HttpStatusCode)),\r\n        Pass = countif(isSuccess(HttpStatusCode))\r\n    | project PassRate=(toreal(Pass)+toreal(ClientFail))/toreal(Total),ServerFailRate=toreal(ServerFail)/toreal(Total),ClientFailRate=toreal(ClientFail)/toreal(Total),Total \r\n)\r\n| project Total,PassRate,ClientFailRate,ServerFailRate"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Uptime - CRP Success Rate"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Uptime - CRP Failure Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "a78bac80-c122-4c99-8f9a-3ba05320bf58",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(OccurrenceTime:datetime,Pass:long,ClientFail:long,ServerFail:long,ResourceProvider:string,Operation:string,ResourceType:string,Reliability:real)[];\r\nlet startTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStart'] | summarize min(OccurrenceTime));\r\nlet endTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStop'] | summarize max(OccurrenceTime));\r\nlet binval = 5m;\r\nlet zeroTimeTable =  (range Succeeded from 0 to 0 step 1\r\n    | mvexpand OccurrenceTime = range(startTime-binval, endTime+binval, binval) to typeof(datetime) limit 65536\r\n    | extend OccurrenceTime = bin(OccurrenceTime, binval));\r\nlet opRegex = \"([^/]+)/?.*/PROVIDERS/([^/]+)/(.*[^/])/?\";\r\nlet extractOperation = (s:string) { extract(opRegex, 1 , s) };\r\nlet extractResourceProvider = (s:string) { extract(opRegex, 2 , s) };\r\nlet extractResourceType = (s:string) { extract(opRegex, 3 , s) };\r\nlet filterOperation = (s:string) { s contains \"PROVIDERS\" };\r\nlet isSuccess = (i:int) { i/100 == 2 or i == 404 };\r\nlet isServerFailure = (i:int) { i/100 == 5 };\r\nlet isClientFailure = (i:int) { i != 404 and i/100 == 4 };\r\nunion isfuzzy=true view,zeroTimeTable,(\r\n    union database(\"db\").[\"ETL-Microsoft-AzureStack-Frontdoor.HttpIncomingRequestEndWith*\"]\r\n    | where OccurrenceTime > startTime and OccurrenceTime < endTime\r\n    | where filterOperation(OperationName)\r\n    | where extractResourceProvider(OperationName) == 'MICROSOFT.COMPUTE'\r\n    | project HttpStatusCode, DurationInMilliseconds, OperationName,OccurrenceTime\r\n    | summarize count() by OperationName,HttpStatusCode,bin(OccurrenceTime,binval)\r\n    | summarize Total = sum(count_),\r\n        ServerFail = sumif(count_,isServerFailure(HttpStatusCode)),\r\n        ClientFail = sumif(count_,isClientFailure(HttpStatusCode)),\r\n        Pass = sumif(count_,isSuccess(HttpStatusCode)),\r\n        StatusCodeCounts = makelist(pack(\"StatusCode\",HttpStatusCode,\"Count\",count_))\r\n        by OperationName,bin(OccurrenceTime,binval)\r\n    | project \r\n        ResourceProvider = extractResourceProvider(OperationName),\r\n        Operation = extractOperation(OperationName), \r\n        ResourceType = extractResourceType(OperationName),\r\n        ServerFail,ClientFail,Pass,OccurrenceTime,Reliability=(toreal(Pass)+toreal(ClientFail))/toreal(Total)\r\n)\r\n| summarize avg(Reliability) by bin(OccurrenceTime, time(1m)) | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Uptime - CRP Failure Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Uptime - CRP Operations with failure count",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "b0b446ae-8fcd-4c6a-9cb4-92ea3b212494",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet schema=datatable(ServerFail:long,OperationName:string,Total:long,StatusCodeCounts:dynamic)[];\r\nlet opRegex = \"([^/]+)/?.*/PROVIDERS/([^/]+)/(.*[^/])/?\";\r\nlet filterOperation = (s:string) { s contains \"PROVIDERS\" };\r\nlet isSuccess = (i:int) { i/100 == 2 or i == 404 };\r\nlet isServerFailure = (i:int) { i/100 == 5 };\r\nlet isClientFailure = (i:int) { i != 404 and i/100 == 4 };\r\nlet extractResourceProvider = (s:string) { extract(opRegex, 2 , s) };\r\nunion isfuzzy=true schema,(\r\n    union database(\"db\").[\"ETL-Microsoft-AzureStack-Frontdoor.HttpIncomingRequestEndWith*\"]\r\n    | where filterOperation(OperationName) and HttpStatusCode != 404\r\n    | where extractResourceProvider(OperationName) == 'MICROSOFT.COMPUTE'\r\n    | project HttpStatusCode, DurationInMilliseconds, OperationName, ApiVersion\r\n    | summarize count() by OperationName,HttpStatusCode\r\n    | summarize Total = sum(count_),\r\n        ServerFail = sumif(count_,isServerFailure(HttpStatusCode)),\r\n        ClientFail = sumif(count_,isClientFailure(HttpStatusCode)),\r\n        Pass = sumif(count_,isSuccess(HttpStatusCode)),\r\n        StatusCodeCounts = makelist(pack(\"StatusCode\",HttpStatusCode,\"Count\",count_))\r\n        by OperationName\r\n    | project ServerFail,OperationName,Total,StatusCodeCounts  \r\n    | where ServerFail > 0 \r\n    | sort by ServerFail desc    \r\n)\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Uptime - CRP Operations with failure count"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "PNUSWAT - VM Creation Success Rate",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "fdb18617-c217-497f-8a70-c9a09ddf7c53",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet schema = datatable(Succeeded:int,Failed:int,DurationInMin:int)[];\r\nunion isfuzzy=true schema,(\r\n    database('db').['ETL-CrpServiceEventSource.ApiQosEvent']\r\n    | where OperationName startswith \"VirtualMachines.\" and not(OperationName endswith \"GET\")\r\n    | distinct OccurrenceTime,OperationName,ResultType,CorrelationId,E2EDurationInMilliseconds,ResourceName,ErrorDetails\r\n    | extend extracted=extractall(@\"(?:VirtualMachines\\.)(\\w*)(?:\\.)(DELETE|PUT|POST)\", OperationName)\r\n    | extend Method=tostring(extracted[0][1]), OpType=tostring(extracted[0][0])\r\n    | project-away extracted\r\n    | join kind=leftouter (\r\n        database('db').['ETL-Microsoft-AzureStack-Compute-Pipeline.VmPipelineRunStop']\r\n        | distinct OccurrenceTime,VmName,CorrelationId,DurationInMs,Exception\r\n        | summarize DurationInMs=sum(DurationInMs),Exception=any(Exception) by VmName,CorrelationId)\r\n    on CorrelationId,$left.ResourceName == $right.VmName\r\n    | where Method==\"PUT\"\r\n    | extend Succeeded=toint(isempty(Exception) and isempty(ErrorDetails) and (ResultType==0 or ResultType==1))\r\n    | extend Failed=toint(1-Succeeded)\r\n    | extend DurationInMin=coalesce(DurationInMs/60000,E2EDurationInMilliseconds/60000,0)\r\n    | project Succeeded,Failed,DurationInMin\r\n)\r\n| summarize avg(Succeeded), sum(Succeeded), sum(Failed)"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "PNUSWAT - VM Creation Success Rate"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "PNUSWAT - VM Create Success and Performance Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "a399d7c7-a85e-40e4-be49-23c8a458f005",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(OccurrenceTime:datetime,Succeeded:long,Failed:long,Reliability:real)[];\r\nlet startTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStart'] | summarize min(OccurrenceTime));\r\nlet endTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStop'] | summarize max(OccurrenceTime));\r\nlet binval = 5m;\r\nlet zeroTimeTable =  (range Succeeded from 0 to 0 step 1\r\n    | mvexpand OccurrenceTime = range(startTime-binval, endTime+binval, binval) to typeof(datetime) limit 65536\r\n    | extend OccurrenceTime = bin(OccurrenceTime, binval));\r\nunion isfuzzy=true view,zeroTimeTable,(\r\n    database('db').['ETL-CrpServiceEventSource.ApiQosEvent']\r\n    | where OccurrenceTime > startTime and OccurrenceTime < endTime\r\n    | where OperationName startswith \"VirtualMachines.\" and not(OperationName endswith \"GET\")\r\n    | distinct OccurrenceTime,OperationName,ResultType,CorrelationId,E2EDurationInMilliseconds,ResourceName,ErrorDetails\r\n    | extend extracted=extractall(@\"(?:VirtualMachines\\.)(\\w*)(?:\\.)(DELETE|PUT|POST)\", OperationName)\r\n    | extend Method=tostring(extracted[0][1]), OpType=tostring(extracted[0][0])\r\n    | project-away extracted\r\n    | join kind=leftouter (\r\n        database('db').['ETL-Microsoft-AzureStack-Compute-Pipeline.VmPipelineRunStop']\r\n        | distinct OccurrenceTime,VmName,CorrelationId,DurationInMs,Exception\r\n        | summarize DurationInMs=sum(DurationInMs),Exception=any(Exception) by VmName,CorrelationId)\r\n    on CorrelationId,$left.ResourceName == $right.VmName\r\n    | where Method==\"PUT\"\r\n    | extend Succeeded=toint(isempty(Exception) and isempty(ErrorDetails) and (ResultType==0 or ResultType==1))\r\n    | extend Failed=toint(1-Succeeded)    \r\n    | summarize Succeeded=countif(Succeeded==1),Failed=countif(Failed==1),Total=count() by bin(OccurrenceTime,binval)\r\n    | project Succeeded,Failed,OccurrenceTime,Reliability=toreal(Succeeded)/toreal(Total)\r\n)\r\n| summarize avg(Reliability) by bin(OccurrenceTime, time(1m)) | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "PNUSWAT - VM Create Success and Performance Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "PNUSWAT - VM Creation - Top 3 Failures",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "f173a399-c933-4d12-afc4-6026ff867cef",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet schema=datatable(ResultCode:string,count_:long)[];\r\nunion isfuzzy=true schema,(\r\n    database('db').['ETL-CrpServiceEventSource.ApiQosEvent']\r\n    | where OperationName startswith \"VirtualMachines.\" and not(OperationName endswith \"GET\")\r\n    | distinct OccurrenceTime,OperationName,ResourceName,ResultType,DurationInMilliseconds,ResultCode,CorrelationId,ErrorDetails\r\n    | where notempty(ResultCode)\r\n    | summarize OccurrenceTime=max(OccurrenceTime),VmName=any(ResourceName),ResultType=any(ResultType),FirstToLastInMs=tolong((max(OccurrenceTime)-min(OccurrenceTime))/1ms),ErrorDetails=any(ErrorDetails) by CorrelationId,ResultCode\r\n    | join kind=leftouter (\r\n        database('db').['ETL-Microsoft-AzureStack-Compute-Pipeline.VmPipelineRunStop']\r\n        | distinct OccurrenceTime,VmName,CorrelationId,DurationInMs,Exception\r\n        | summarize DurationInMs=sum(DurationInMs),Exception=any(Exception) by VmName,CorrelationId)\r\n    on CorrelationId,VmName\r\n    | extend Duration=iff(DurationInMs>FirstToLastInMs,DurationInMs,FirstToLastInMs), isSuccess=(isempty(Exception) and isempty(ErrorDetails) and (ResultType==0 or ResultType==1))\r\n    | where not(isSuccess)\r\n    | where notempty(ResultCode)\r\n    | extend Example=pack(\"Exception\",Exception, \"ErrorDetails\", ErrorDetails, \"CorrelationId\", CorrelationId, \"OccurrenceTime\", OccurrenceTime)\r\n    | summarize count(),Example=any(tostring(Example)) by ResultCode\r\n    | order by count_ desc\r\n    | take 3\r\n    | project ResultCode,count_,Example=toobject(Example)\r\n    | project count_,ResultCode,ExampleCorrelationId=Example.CorrelationId,ExampleException=Example.Exception,ExampleOccurrenceTime=Example.OccurrenceTime,ExampleErrorDetails=Example.ErrorDetails,Cluster='{cluster}', Database='{database}'\r\n)\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "PNUSWAT - VM Creation - Top 3 Failures"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Uptime - SRP Success Rate",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "b0f3555e-2417-43ba-846d-408f2a2939bd",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet schema=datatable(ServerFailRate:real,ClientFailRate:real,PassRate:real,Total:long)[];\r\nlet opRegex = \"([^/]+)/?.*/PROVIDERS/([^/]+)/(.*[^/])/?\";\r\nlet extractOperation = (s:string) { extract(opRegex, 1 , s) };\r\nlet extractResourceProvider = (s:string) { extract(opRegex, 2 , s) };\r\nlet extractResourceType = (s:string) { extract(opRegex, 3 , s) };\r\nlet filterOperation = (s:string) { s contains \"PROVIDERS\" };\r\nlet isSuccess = (i:int) { i/100 == 2 or i == 404 };\r\nlet isServerFailure = (i:int) { i/100 == 5 };\r\nlet isClientFailure = (i:int) { i != 404 and i/100 == 4 };\r\nlet request = database(\"db\").['ETL-Microsoft-AzureStack-Common-Infrastructure-WebApi.HttpServerRequestStart'] | where ApplicationType == \"SrpServiceAppType\";\r\nlet response = database(\"db\").['ETL-Microsoft-AzureStack-Common-Infrastructure-WebApi.HttpServerRequestStop'] | where ApplicationType == \"SrpServiceAppType\";\r\nunion isfuzzy=true schema,(\r\n    union request\r\n\t| join kind=leftouter response on $left.ActivityID  == $right.ActivityID and $left.RequestHeaders == $right.RequestHeaders\r\n    | project ResponseStatusCode, DurationMs\r\n    | summarize Total = count(),\r\n        ServerFail = countif(ResponseStatusCode>=500 or isnull(ResponseStatusCode) or DurationMs >=30000),\r\n        ClientFail = countif(isClientFailure(ResponseStatusCode)),        \r\n        Pass = countif(isSuccess(ResponseStatusCode))\r\n    | project PassRate=toreal(Pass)/toreal(Total),ServerFailRate=toreal(ServerFail)/toreal(Total),Total,ClientFailRate=toreal(ClientFail)/toreal(Total)\r\n)\r\n| project Total,PassRate,ClientFailRate,ServerFailRate"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Uptime - SRP Success Rate"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Uptime - SRP Failure Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "4631c57d-26ca-4303-825b-117503e19bb2",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(OccurrenceTime:datetime,Pass:long,ClientFail:long,ServerFail:long,ResourceProvider:string,Operation:string,ResourceType:string,Reliability:real)[];\r\nlet startTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStart'] | summarize min(OccurrenceTime));\r\nlet endTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStop'] | summarize max(OccurrenceTime));\r\nlet binval = 5m;\r\nlet zeroTimeTable =  (range Succeeded from 0 to 0 step 1\r\n    | mvexpand OccurrenceTime = range(startTime-binval, endTime+binval, binval) to typeof(datetime) limit 65536\r\n    | extend OccurrenceTime = bin(OccurrenceTime, binval));\r\nlet opRegex = \"([^/]+)/?.*/PROVIDERS/([^/]+)/(.*[^/])/?\";\r\nlet extractOperation = (s:string) { extract(opRegex, 1 , s) };\r\nlet extractResourceProvider = (s:string) { extract(opRegex, 2 , s) };\r\nlet extractResourceType = (s:string) { extract(opRegex, 3 , s) };\r\nlet filterOperation = (s:string) { s contains \"PROVIDERS\" };\r\nlet isSuccess = (i:int) { i/100 == 2 or i == 404 };\r\nlet isServerFailure = (i:int) { i/100 == 5 };\r\nlet isClientFailure = (i:int) { i != 404 and i/100 == 4 };\r\nlet request = database(\"db\").['ETL-Microsoft-AzureStack-Common-Infrastructure-WebApi.HttpServerRequestStart'] | where ApplicationType == \"SrpServiceAppType\";\r\nlet response = database(\"db\").['ETL-Microsoft-AzureStack-Common-Infrastructure-WebApi.HttpServerRequestStop'] | where ApplicationType == \"SrpServiceAppType\";\r\nunion isfuzzy=true view,zeroTimeTable,(\r\n    union request\r\n\t| join kind=leftouter response on $left.ActivityID  == $right.ActivityID and $left.RequestHeaders == $right.RequestHeaders\r\n    | where OccurrenceTime > startTime and OccurrenceTime < endTime\r\n    | project ResponseStatusCode, DurationMs, OccurrenceTime, RequestUri\r\n    | summarize count() by DurationMs,RequestUri,ResponseStatusCode,bin(OccurrenceTime,binval)\r\n    | summarize Total = sum(count_),\r\n        ServerFail = sumif(count_,(ResponseStatusCode>=500 or isnull(ResponseStatusCode) or DurationMs >=30000)),\r\n        Pass = sumif(count_,isSuccess(ResponseStatusCode)),\r\n        StatusCodeCounts = makelist(pack(\"StatusCode\",ResponseStatusCode,\"Count\",count_))\r\n        by RequestUri,bin(OccurrenceTime,binval)\r\n    | project \r\n        ServerFail,Pass,OccurrenceTime,Reliability=toreal(Pass)/toreal(Total)\r\n)\r\n| summarize avg(Reliability) by bin(OccurrenceTime, time(1m)) | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Uptime - SRP Failure Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Uptime - SRP Operations with failure count",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "2505f474-d3e9-4932-a199-9516f3e26885",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet schema=datatable(ServerFail:long,RequestUri:string,Total:long,StatusCodeCounts:dynamic)[];\r\nlet opRegex = \"([^/]+)/?.*/PROVIDERS/([^/]+)/(.*[^/])/?\";\r\nlet filterOperation = (s:string) { s contains \"PROVIDERS\" };\r\nlet isSuccess = (i:int) { i/100 == 2 or i == 404 };\r\nlet isServerFailure = (i:int) { i/100 == 5 };\r\nlet isClientFailure = (i:int) { i != 404 and i/100 == 4 };\r\nlet extractResourceProvider = (s:string) { extract(opRegex, 2 , s) };\r\nlet request = database(\"db\").['ETL-Microsoft-AzureStack-Common-Infrastructure-WebApi.HttpServerRequestStart'] | where ApplicationType == \"SrpServiceAppType\";\r\nlet response = database(\"db\").['ETL-Microsoft-AzureStack-Common-Infrastructure-WebApi.HttpServerRequestStop'] | where ApplicationType == \"SrpServiceAppType\";\r\nunion isfuzzy=true schema,(\r\n    union request\r\n\t| join kind=leftouter response on $left.ActivityID  == $right.ActivityID and $left.RequestHeaders == $right.RequestHeaders\r\n    | project ResponseStatusCode, DurationMs, OccurrenceTime, RequestUri\r\n    | summarize count() by RequestUri,ResponseStatusCode,DurationMs\r\n    | summarize Total = sum(count_),\r\n        ServerFail = sumif(count_,(ResponseStatusCode>=500 or isnull(ResponseStatusCode) or DurationMs >=30000)),        \r\n        Pass = sumif(count_,isSuccess(ResponseStatusCode)),\r\n        StatusCodeCounts = makelist(pack(\"StatusCode\",ResponseStatusCode,\"Count\",count_))\r\n        by RequestUri\r\n    | project ServerFail,RequestUri,Total,StatusCodeCounts  \r\n    | where ServerFail > 0 \r\n    | sort by ServerFail desc    \r\n)\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Uptime - SRP Operations with failure count"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Uptime - NRP Success Rate",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "3622177e-5d30-43d3-994b-9ad89af59b9a",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet schema=datatable(ServerFailRate:real,ClientFailRate:real,PassRate:real,Total:long)[];\r\nlet opRegex = \"([^/]+)/?.*/PROVIDERS/([^/]+)/(.*[^/])/?\";\r\nlet extractOperation = (s:string) { extract(opRegex, 1 , s) };\r\nlet extractResourceProvider = (s:string) { extract(opRegex, 2 , s) };\r\nlet extractResourceType = (s:string) { extract(opRegex, 3 , s) };\r\nlet filterOperation = (s:string) { s contains \"PROVIDERS\" };\r\nlet isSuccess = (i:int) { i/100 == 2 or i == 404 };\r\nlet isServerFailure = (i:int) { i/100 == 5 };\r\nlet isClientFailure = (i:int) { i != 404 and i/100 == 4 };\r\nunion isfuzzy=true schema,(\r\n    union database(\"db\").[\"ETL-Microsoft-AzureStack-Frontdoor.HttpIncomingRequestEndWith*\"]\r\n    | where filterOperation(OperationName)\r\n    | where extractResourceProvider(OperationName) == 'MICROSOFT.NETWORK'\r\n    | project HttpStatusCode\r\n    | summarize Total = count(),\r\n        ServerFail = countif(isServerFailure(HttpStatusCode)),\r\n        ClientFail = countif(isClientFailure(HttpStatusCode)),\r\n        Pass = countif(isSuccess(HttpStatusCode))\r\n    | project PassRate=(toreal(Pass)+toreal(ClientFail))/toreal(Total),ServerFailRate=toreal(ServerFail)/toreal(Total),ClientFailRate=toreal(ClientFail)/toreal(Total),Total \r\n)\r\n| project Total,PassRate,ClientFailRate,ServerFailRate"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Uptime - NRP Success Rate"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Uptime - NRP Failure Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "f7cdf385-f7c0-4974-b391-018d2b043265",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(OccurrenceTime:datetime,Pass:long,ClientFail:long,ServerFail:long,ResourceProvider:string,Operation:string,ResourceType:string,Reliability:real)[];\r\nlet startTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStart'] | summarize min(OccurrenceTime));\r\nlet endTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStop'] | summarize max(OccurrenceTime));\r\nlet binval = 5m;\r\nlet zeroTimeTable =  (range Succeeded from 0 to 0 step 1\r\n    | mvexpand OccurrenceTime = range(startTime-binval, endTime+binval, binval) to typeof(datetime) limit 65536\r\n    | extend OccurrenceTime = bin(OccurrenceTime, binval));\r\nlet opRegex = \"([^/]+)/?.*/PROVIDERS/([^/]+)/(.*[^/])/?\";\r\nlet extractOperation = (s:string) { extract(opRegex, 1 , s) };\r\nlet extractResourceProvider = (s:string) { extract(opRegex, 2 , s) };\r\nlet extractResourceType = (s:string) { extract(opRegex, 3 , s) };\r\nlet filterOperation = (s:string) { s contains \"PROVIDERS\" };\r\nlet isSuccess = (i:int) { i/100 == 2 or i == 404 };\r\nlet isServerFailure = (i:int) { i/100 == 5 };\r\nlet isClientFailure = (i:int) { i != 404 and i/100 == 4 };\r\nunion isfuzzy=true view,zeroTimeTable,(\r\n    union database(\"db\").[\"ETL-Microsoft-AzureStack-Frontdoor.HttpIncomingRequestEndWith*\"]\r\n    | where OccurrenceTime > startTime and OccurrenceTime < endTime\r\n    | where filterOperation(OperationName)\r\n    | where extractResourceProvider(OperationName) == 'MICROSOFT.NETWORK'\r\n    | project HttpStatusCode, DurationInMilliseconds, OperationName,OccurrenceTime\r\n    | summarize count() by OperationName,HttpStatusCode,bin(OccurrenceTime,binval)\r\n    | summarize Total = sum(count_),\r\n        ServerFail = sumif(count_,isServerFailure(HttpStatusCode)),\r\n        ClientFail = sumif(count_,isClientFailure(HttpStatusCode)),\r\n        Pass = sumif(count_,isSuccess(HttpStatusCode)),\r\n        StatusCodeCounts = makelist(pack(\"StatusCode\",HttpStatusCode,\"Count\",count_))\r\n        by OperationName,bin(OccurrenceTime,binval)\r\n    | project \r\n        ResourceProvider = extractResourceProvider(OperationName),\r\n        Operation = extractOperation(OperationName), \r\n        ResourceType = extractResourceType(OperationName),\r\n        ServerFail,ClientFail,Pass,OccurrenceTime,Reliability=(toreal(Pass)+toreal(ClientFail))/toreal(Total)\r\n)\r\n| summarize avg(Reliability) by bin(OccurrenceTime, time(1m)) | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Uptime - NRP Failure Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Uptime - NRP Operations with failure count",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "482f750a-dce6-4985-a7ea-16c1f676f00d",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet schema=datatable(ServerFail:long,OperationName:string,Total:long,StatusCodeCounts:dynamic)[];\r\nlet opRegex = \"([^/]+)/?.*/PROVIDERS/([^/]+)/(.*[^/])/?\";\r\nlet filterOperation = (s:string) { s contains \"PROVIDERS\" };\r\nlet isSuccess = (i:int) { i/100 == 2 or i == 404 };\r\nlet isServerFailure = (i:int) { i/100 == 5 };\r\nlet isClientFailure = (i:int) { i != 404 and i/100 == 4 };\r\nlet extractResourceProvider = (s:string) { extract(opRegex, 2 , s) };\r\nunion isfuzzy=true schema,(\r\n    union database(\"db\").[\"ETL-Microsoft-AzureStack-Frontdoor.HttpIncomingRequestEndWith*\"]\r\n    | where filterOperation(OperationName)\r\n    | where extractResourceProvider(OperationName) == 'MICROSOFT.NETWORK'\r\n    | project HttpStatusCode, DurationInMilliseconds, OperationName, ApiVersion\r\n    | summarize count() by OperationName,HttpStatusCode\r\n    | summarize Total = sum(count_),\r\n        ServerFail = sumif(count_,isServerFailure(HttpStatusCode)),\r\n        ClientFail = sumif(count_,isClientFailure(HttpStatusCode)),\r\n        Pass = sumif(count_,isSuccess(HttpStatusCode)),\r\n        StatusCodeCounts = makelist(pack(\"StatusCode\",HttpStatusCode,\"Count\",count_))\r\n        by OperationName\r\n    | project ServerFail,OperationName,Total,StatusCodeCounts  \r\n    | where ServerFail > 0\r\n    | sort by ServerFail desc    \r\n)\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Uptime - NRP Operations with failure count"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Uptime - KeyVault Success Rate",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "69d7e25d-ad84-483f-b6a3-e19e47dc4531",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet schema=datatable(ServerFailRate:real,ClientFailRate:real,PassRate:real,Total:long)[];\r\nlet opRegex = \"([^/]+)/?.*/PROVIDERS/([^/]+)/(.*[^/])/?\";\r\nlet extractOperation = (s:string) { extract(opRegex, 1 , s) };\r\nlet extractResourceProvider = (s:string) { extract(opRegex, 2 , s) };\r\nlet extractResourceType = (s:string) { extract(opRegex, 3 , s) };\r\nlet filterOperation = (s:string) { s contains \"PROVIDERS\" };\r\nlet isSuccess = (i:int) { i/100 == 2 or i == 404 };\r\nlet isServerFailure = (i:int) { i/100 == 5 };\r\nlet isClientFailure = (i:int) { i != 404 and i/100 == 4 };\r\nunion isfuzzy=true schema,(\r\n    union database(\"db\").[\"ETL-Microsoft-AzureStack-Frontdoor.HttpIncomingRequestEndWith*\"]\r\n    | where filterOperation(OperationName)\r\n    | where extractResourceProvider(OperationName) == 'MICROSOFT.KEYVAULT'\r\n    | project HttpStatusCode\r\n    | summarize Total = count(),\r\n        ServerFail = countif(isServerFailure(HttpStatusCode)),\r\n        ClientFail = countif(isClientFailure(HttpStatusCode)),\r\n        Pass = countif(isSuccess(HttpStatusCode))\r\n    | project PassRate=(toreal(Pass)+toreal(ClientFail))/toreal(Total),ServerFailRate=toreal(ServerFail)/toreal(Total),ClientFailRate=toreal(ClientFail)/toreal(Total),Total \r\n)\r\n| project Total,PassRate,ClientFailRate,ServerFailRate"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Uptime - KeyVault Success Rate"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Uptime - KeyVault Failure Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "1c0b1510-dd58-4091-b71a-30f77bf32f3c",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(OccurrenceTime:datetime,Pass:long,ClientFail:long,ServerFail:long,ResourceProvider:string,Operation:string,ResourceType:string,Reliability:real)[];\r\nlet startTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStart'] | summarize min(OccurrenceTime));\r\nlet endTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStop'] | summarize max(OccurrenceTime));\r\nlet binval = 5m;\r\nlet zeroTimeTable =  (range Succeeded from 0 to 0 step 1\r\n    | mvexpand OccurrenceTime = range(startTime-binval, endTime+binval, binval) to typeof(datetime) limit 65536\r\n    | extend OccurrenceTime = bin(OccurrenceTime, binval));\r\nlet opRegex = \"([^/]+)/?.*/PROVIDERS/([^/]+)/(.*[^/])/?\";\r\nlet extractOperation = (s:string) { extract(opRegex, 1 , s) };\r\nlet extractResourceProvider = (s:string) { extract(opRegex, 2 , s) };\r\nlet extractResourceType = (s:string) { extract(opRegex, 3 , s) };\r\nlet filterOperation = (s:string) { s contains \"PROVIDERS\" };\r\nlet isSuccess = (i:int) { i/100 == 2 or i == 404 };\r\nlet isServerFailure = (i:int) { i/100 == 5 };\r\nlet isClientFailure = (i:int) { i != 404 and i/100 == 4 };\r\nunion isfuzzy=true view,zeroTimeTable,(\r\n    union database(\"db\").[\"ETL-Microsoft-AzureStack-Frontdoor.HttpIncomingRequestEndWith*\"]\r\n    | where OccurrenceTime > startTime and OccurrenceTime < endTime\r\n    | where filterOperation(OperationName)\r\n    | where extractResourceProvider(OperationName) == 'MICROSOFT.KEYVAULT'\r\n    | project HttpStatusCode, DurationInMilliseconds, OperationName,OccurrenceTime\r\n    | summarize count() by OperationName,HttpStatusCode,bin(OccurrenceTime,binval)\r\n    | summarize Total = sum(count_),\r\n        ServerFail = sumif(count_,isServerFailure(HttpStatusCode)),\r\n        ClientFail = sumif(count_,isClientFailure(HttpStatusCode)),\r\n        Pass = sumif(count_,isSuccess(HttpStatusCode)),\r\n        StatusCodeCounts = makelist(pack(\"StatusCode\",HttpStatusCode,\"Count\",count_))\r\n        by OperationName,bin(OccurrenceTime,binval)\r\n    | project \r\n        ResourceProvider = extractResourceProvider(OperationName),\r\n        Operation = extractOperation(OperationName), \r\n        ResourceType = extractResourceType(OperationName),\r\n        ServerFail,ClientFail,Pass,OccurrenceTime,Reliability=(toreal(Pass)+toreal(ClientFail))/toreal(Total)\r\n)\r\n| summarize avg(Reliability) by bin(OccurrenceTime, time(1m)) | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Uptime - KeyVault Failure Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Uptime - KeyVault Operations with failure count",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "a6eeca9b-e895-4eb7-922d-de89751dfa21",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet schema=datatable(ServerFail:long,OperationName:string,Total:long,StatusCodeCounts:dynamic)[];\r\nlet opRegex = \"([^/]+)/?.*/PROVIDERS/([^/]+)/(.*[^/])/?\";\r\nlet filterOperation = (s:string) { s contains \"PROVIDERS\" };\r\nlet isSuccess = (i:int) { i/100 == 2 or i == 404 };\r\nlet isServerFailure = (i:int) { i/100 == 5 };\r\nlet isClientFailure = (i:int) { i != 404 and i/100 == 4 };\r\nlet extractResourceProvider = (s:string) { extract(opRegex, 2 , s) };\r\nunion isfuzzy=true schema,(\r\n    union database(\"db\").[\"ETL-Microsoft-AzureStack-Frontdoor.HttpIncomingRequestEndWith*\"]\r\n    | where filterOperation(OperationName) and HttpStatusCode != 404\r\n    | where extractResourceProvider(OperationName) == 'MICROSOFT.KEYVAULT'\r\n    | project HttpStatusCode, DurationInMilliseconds, OperationName, ApiVersion\r\n    | summarize count() by OperationName,HttpStatusCode\r\n    | summarize Total = sum(count_),\r\n        ServerFail = sumif(count_,isServerFailure(HttpStatusCode)),\r\n        ClientFail = sumif(count_,isClientFailure(HttpStatusCode)),\r\n        Pass = sumif(count_,isSuccess(HttpStatusCode)),\r\n        StatusCodeCounts = makelist(pack(\"StatusCode\",HttpStatusCode,\"Count\",count_))\r\n        by OperationName\r\n    | project ServerFail,OperationName,Total,StatusCodeCounts  \r\n    | where ServerFail > 0 \r\n    | sort by ServerFail desc    \r\n)\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "Uptime - KeyVault Operations with failure count"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      }
+    ],
+    "project": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342",
+    "context": {
+      "uiCron": {
+        "freq": "day",
+        "rate": 1,
+        "value": "0 17 18 */1 * *",
+        "isEntered": false,
+        "hourMins": 4,
+        "minuteSecs": 18,
+        "time": "2019-10-03T01:17:44.448Z",
+        "weekDays": [
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "monthDay": 1
+      },
+      "lensScenario": null,
+      "lensCreatedBy": "v-vasub",
+      "lensCreatedDate": "2019-10-02T18:20:51.440692Z",
+      "lensModifiedBy": "v-vasub",
+      "lensModifiedDate": "2019-10-02T20:33:20.7978168Z"
+    },
+    "failureWebhook": {
+      "url": "https://lens.msftcloudes.com/share/jobnotificationemail",
+      "aadResource": "aa0c39bf-5086-4900-bf89-6404bff62cf8",
+      "aadTenant": "microsoft.onmicrosoft.com"
+    }
+  },
+  "createdBy": "v-vasub",
+  "createdDate": "2019-10-02T18:20:51.440692Z",
+  "nextExecutionDate": "2019-10-03T18:17:00Z",
+  "modifiedBy": "v-vasub",
+  "modifiedDate": "2019-10-02T20:33:20.7978168Z",
+  "version": "43",
+  "isEnabled": true,
+  "isQuarantined": false,
+  "instances": [
+    {
+      "id": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342|5285752163894ae1ad04fb2c349a2f56|M|2019-10-02T23:08:55.2265812Z",
+      "jobId": "5285752163894ae1ad04fb2c349a2f56",
+      "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+      "status": "Succeeded",
+      "jobStatus": "0",
+      "errorMsg": null,
+      "createdDate": "2019-10-02T23:08:55Z",
+      "startTime": "2019-10-02T23:08:55Z",
+      "endTime": "2019-10-02T23:11:27Z",
+      "elapsedTime": "2019-10-03T00:02:32.6811327Z",
+      "seed": "2019-10-01T18:17:00Z",
+      "logLink": "https://analytics.applicationinsights.io/subscriptions/56dcf710-f955-442e-8ac2-3b90ab65dea1/resourcegroups/datastudioorchestrator/components/datastudiojobs?q=H4sIAAAAAAAEAFWQMU%2fDMBCFdyT%2bw21NhItcQ6BECgOCAQkQUjOwIWOfwCixXduBROqPx26alk723Tu%2fd587rYyGzOG6Qx98TiCTaFFL1ELhtg6OC%2fSwAexDFEBi4KrxUIEcNG%2bVyHTXNHl6ir1AG6JjGrfOfKMIEFQbrXlrCRiLjif9%2fVESiI8xuiit0bXGh3qwSCAOe%2f55JDyPLTJF56cnG%2fj9QodHjlBVMFuby%2f764Y6%2bvYpqBjzuu8%2bH27gyD5gaGaOLm%2fmCzimr2UVJl2VRnDN2VSwX7IzSktJtyMRQTwxx370fgRX%2boFNheIpnEyX%2fvybwMgImTgI7iDi1IyRwf%2fjJ8Za4jJPo4GOAQ6ZEL%2f4Aha%2bfR6kBAAA%3d&apptype=web",
+      "elapsedMilliseconds": 152681,
+      "parameters": {
+        "startDateTime": "2019-10-01T18:17:00Z",
+        "endDateTime": "2019-10-02T18:17:00Z"
+      },
+      "segments": [
+        {
+          "segmentId": "969c924b-cb3d-413c-81e6-ed246ba7d343",
+          "startTime": "2019-10-02T23:08:55.289117Z",
+          "endTime": "2019-10-02T23:09:03.2003311Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Uptime - ARM Success Rate"
+        },
+        {
+          "segmentId": "7806c904-b70d-4a2f-b3bf-e0057536a17c",
+          "startTime": "2019-10-02T23:09:03.2472536Z",
+          "endTime": "2019-10-02T23:09:10.6561862Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Uptime - ARM Failure Timeline"
+        },
+        {
+          "segmentId": "0e2b9fc8-bb1a-4567-87e2-2eb371218f3b",
+          "startTime": "2019-10-02T23:09:10.6718441Z",
+          "endTime": "2019-10-02T23:09:18.3748032Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Uptime - ARM Operations with failure count"
+        },
+        {
+          "segmentId": "933b4a58-55cd-40b0-adc2-f607ecd2e85c",
+          "startTime": "2019-10-02T23:09:18.3940624Z",
+          "endTime": "2019-10-02T23:09:25.3723206Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Uptime - CRP Success Rate"
+        },
+        {
+          "segmentId": "a78bac80-c122-4c99-8f9a-3ba05320bf58",
+          "startTime": "2019-10-02T23:09:25.403532Z",
+          "endTime": "2019-10-02T23:09:32.6259407Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Uptime - CRP Failure Timeline"
+        },
+        {
+          "segmentId": "b0b446ae-8fcd-4c6a-9cb4-92ea3b212494",
+          "startTime": "2019-10-02T23:09:32.657223Z",
+          "endTime": "2019-10-02T23:09:39.8043146Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Uptime - CRP Operations with failure count"
+        },
+        {
+          "segmentId": "fdb18617-c217-497f-8a70-c9a09ddf7c53",
+          "startTime": "2019-10-02T23:09:39.8199179Z",
+          "endTime": "2019-10-02T23:09:47.1965394Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "PNUSWAT - VM Creation Success Rate"
+        },
+        {
+          "segmentId": "a399d7c7-a85e-40e4-be49-23c8a458f005",
+          "startTime": "2019-10-02T23:09:47.2277615Z",
+          "endTime": "2019-10-02T23:09:54.1609343Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "PNUSWAT - VM Create Success and Performance Timeline"
+        },
+        {
+          "segmentId": "f173a399-c933-4d12-afc4-6026ff867cef",
+          "startTime": "2019-10-02T23:09:54.176569Z",
+          "endTime": "2019-10-02T23:10:01.9690064Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "PNUSWAT - VM Creation - Top 3 Failures"
+        },
+        {
+          "segmentId": "b0f3555e-2417-43ba-846d-408f2a2939bd",
+          "startTime": "2019-10-02T23:10:02.6860466Z",
+          "endTime": "2019-10-02T23:10:18.5864328Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Uptime - SRP Success Rate"
+        },
+        {
+          "segmentId": "4631c57d-26ca-4303-825b-117503e19bb2",
+          "startTime": "2019-10-02T23:10:18.6333157Z",
+          "endTime": "2019-10-02T23:10:26.5822541Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Uptime - SRP Failure Timeline"
+        },
+        {
+          "segmentId": "2505f474-d3e9-4932-a199-9516f3e26885",
+          "startTime": "2019-10-02T23:10:26.6142218Z",
+          "endTime": "2019-10-02T23:10:42.2347023Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Uptime - SRP Operations with failure count"
+        },
+        {
+          "segmentId": "3622177e-5d30-43d3-994b-9ad89af59b9a",
+          "startTime": "2019-10-02T23:10:42.3148705Z",
+          "endTime": "2019-10-02T23:10:49.2756529Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Uptime - NRP Success Rate"
+        },
+        {
+          "segmentId": "f7cdf385-f7c0-4974-b391-018d2b043265",
+          "startTime": "2019-10-02T23:10:49.3028614Z",
+          "endTime": "2019-10-02T23:10:56.5093188Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Uptime - NRP Failure Timeline"
+        },
+        {
+          "segmentId": "482f750a-dce6-4985-a7ea-16c1f676f00d",
+          "startTime": "2019-10-02T23:10:56.5433486Z",
+          "endTime": "2019-10-02T23:11:03.5292649Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Uptime - NRP Operations with failure count"
+        },
+        {
+          "segmentId": "69d7e25d-ad84-483f-b6a3-e19e47dc4531",
+          "startTime": "2019-10-02T23:11:03.5605336Z",
+          "endTime": "2019-10-02T23:11:10.564212Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Uptime - KeyVault Success Rate"
+        },
+        {
+          "segmentId": "1c0b1510-dd58-4091-b71a-30f77bf32f3c",
+          "startTime": "2019-10-02T23:11:10.5954428Z",
+          "endTime": "2019-10-02T23:11:17.6933555Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Uptime - KeyVault Failure Timeline"
+        },
+        {
+          "segmentId": "a6eeca9b-e895-4eb7-922d-de89751dfa21",
+          "startTime": "2019-10-02T23:11:17.7245932Z",
+          "endTime": "2019-10-02T23:11:24.7747163Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Uptime - KeyVault Operations with failure count"
+        }
+      ],
+      "groupId": null
+    }
+  ],
+  "shareType": "shared",
+  "eTag": ""
+}

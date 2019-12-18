@@ -1,0 +1,236 @@
+{
+  "id": "4d6e01b46e5442fe8b2a7e36527c5d9e",
+  "name": "ClientAPI",
+  "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+  "provider": "Dso",
+  "scenario": "",
+  "description": "",
+  "tags": "",
+  "config": {
+    "jobName": "4d6e01b46e5442fe8b2a7e36527c5d9e",
+    "jobDisplayName": "ClientAPI",
+    "jobDescription": "",
+    "tags": "",
+    "maxJobInstances": 1,
+    "isDebug": false,
+    "appendUtcIndicator": false,
+    "allocationType": 0,
+    "jobScheduleSettings": {
+      "scheduleType": "Frequency",
+      "frequencySettings": {
+        "cronSchedule": "0 29 22 */1 * *",
+        "backFill": false,
+        "monthly": false
+      }
+    },
+    "defaultICMAlerts": false,
+    "activities": [
+      {
+        "activityDisplayName": "ClientAPI_Ops_Summary",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "25994d61-4758-4e69-91ce-7f7b2a45a2b1",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet filters = datatable(Description:string,Url:string,Workspace:string)[];\r\nlet opRegex = \"([^/]+)/?.*/PROVIDERS/([^/]+)/(.*[^/])/?\";\r\nlet extractOperation = (s:string) { extract(opRegex, 1 , s) };\r\nlet extractResourceProvider = (s:string) { extract(opRegex, 2 , s) };\r\nlet extractResourceType = (s:string) { extract(opRegex, 3 , s) };\r\nlet filterOperation = (s:string) { s contains \"PROVIDERS\" };\r\nlet isSuccess = (i:int) { i in (200,201,202) };\r\nlet isFailure = (i:int) { i !in (200,201,202,404) };\r\nunion database(\"db\").[\"ETL-Microsoft-AzureStack-Frontdoor.HttpIncomingRequestEndWith*\"]\r\n    | where filterOperation(OperationName) and HttpStatusCode != 404\r\n    | project HttpStatusCode, DurationInMilliseconds, OperationName, ApiVersion\r\n    | summarize Total = count(),\r\n        Fail = countif(isFailure(HttpStatusCode)), \r\n        Pass = countif(isSuccess(HttpStatusCode)),\r\n        MinRTMs = min(DurationInMilliseconds),\r\n        95thRTMs = percentile(DurationInMilliseconds,95),\r\n        StdDev = stdev(DurationInMilliseconds),\r\n        RelStdDev = 100 * stdev(DurationInMilliseconds)/avg(DurationInMilliseconds)\r\n        by OperationName,ApiVersion\r\n    | project \r\n        ResourceProvider = extractResourceProvider(OperationName),\r\n        Operation = extractOperation(OperationName), \r\n        ResourceType = extractResourceType(OperationName),\r\n        ApiVersion,\r\n        Total,\r\n        PassPct = round(100*Pass/todouble(Total),2), \r\n        FailPct = round(100*Fail/todouble(Total),2), \r\n        Reliability = round(100.0 * Pass/Total,2), \r\n        MinRTMs , round(95thRTMs,2) , \r\n        round(StdDev,2), \r\n        round(RelStdDev,2)\r\n    | sort by Reliability asc;\r\nfilters\r\n| extend Cluster='{cluster}', Database='{database}'\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "ClientAPI_Ops_Summary"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "ClientAPI_TenantOps_Performance",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "21ccb65e-b046-4eaf-af60-d830a684c585",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxrecords=100000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet cleanupRegex = \"([^/]+/).*/?PROVIDERS/(.*)\";\r\nlet cleanup = (s:string) { iff(s contains \"PROVIDERS\", strcat(extract(cleanupRegex, 1, s),extract(cleanupRegex, 2, s)),s) };\r\nlet filterOperation = (s:string) {s notcontains \".Admin\";};\r\ndatabase(\"db\").['ETL-Microsoft-AzureStack-Frontdoor.HttpOutgoingRequestEndWithSuccess'] | where filterOperation(OperationName)\r\n    | project DurationInMilliseconds, OperationName = cleanup(OperationName)\r\n    | summarize \r\n        Less100Ms = 1.0 * countif(DurationInMilliseconds <= 100)/count(),\r\n        Less500Ms = 1.0 * countif(DurationInMilliseconds <= 500 and DurationInMilliseconds > 100)/count(),\r\n        Less1000Ms = 1.0 * countif(DurationInMilliseconds <= 1000 and DurationInMilliseconds > 500)/count(),\r\n        Greater1000Ms = 1.0 * countif(DurationInMilliseconds > 1000)/count()\r\n        by OperationName\r\n        | sort by Greater1000Ms, Less1000Ms, Less500Ms, Less100Ms\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "ClientAPI_TenantOps_Performance"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "ClientAPI-TenantOperations Performance",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "b767e80f-7be9-4457-81f3-bf474d031b0b",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "       set truncationmaxrecords=100000;\r\nalias database db = cluster('{cluster}').database('{database}}');\r\nlet cleanupRegex = \"([^/]+/).*/?PROVIDERS/(.*)\";\r\nlet cleanup = (s:string) { iff(s contains \"PROVIDERS\", strcat(extract(cleanupRegex, 1, s),extract(cleanupRegex, 2, s)),s) };\r\nlet filterOperation = (s:string) {s notcontains \".Admin\";};\r\ndatabase(\"db\").['ETL-Microsoft-AzureStack-Frontdoor.HttpOutgoingRequestEndWithSuccess'] | where filterOperation(OperationName)\r\n    | project DurationInMilliseconds, OperationName = cleanup(OperationName)\r\n    | summarize \r\n        Less100Ms = 1.0 * countif(DurationInMilliseconds <= 100)/count(),\r\n        Less500Ms = 1.0 * countif(DurationInMilliseconds <= 500 and DurationInMilliseconds > 100)/count(),\r\n        Less1000Ms = 1.0 * countif(DurationInMilliseconds <= 1000 and DurationInMilliseconds > 500)/count(),\r\n        Greater1000Ms = 1.0 * countif(DurationInMilliseconds > 1000)/count()\r\n        by OperationName\r\n        | sort by Greater1000Ms, Less1000Ms, Less500Ms, Less100Ms"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "ClientAPI-TenantOperations Performance"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "Process data",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "b0fce974-624f-4109-8e19-046fb51d06e3",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxrecords=100000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet cleanupRegex = \"([^/]+/).*/?PROVIDERS/(.*)\";\r\nlet cleanup = (s:string) { iff(s contains \"PROVIDERS\", strcat(extract(cleanupRegex, 1, s),extract(cleanupRegex, 2, s)),s) };\r\nlet filterOperation = (s:string) {s contains \".Admin\";};\r\ndatabase(\"db\").['ETL-Microsoft-AzureStack-Frontdoor.HttpOutgoingRequestEndWithSuccess'] | where filterOperation(OperationName)\r\n    | project DurationInMilliseconds, OperationName = cleanup(OperationName)\r\n    | summarize \r\n        Less100Ms = 1.0 * countif(DurationInMilliseconds <= 100)/count(),\r\n        Less500Ms = 1.0 * countif(DurationInMilliseconds <= 500 and DurationInMilliseconds > 100)/count(),\r\n        Less1000Ms = 1.0 * countif(DurationInMilliseconds <= 1000 and DurationInMilliseconds > 500)/count(),\r\n        Greater1000Ms = 1.0 * countif(DurationInMilliseconds > 1000)/count()\r\n        by OperationName\r\n        | sort by Greater1000Ms, Less1000Ms, Less500Ms, Less100Ms"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "ClientAPI-AdminOperations Performance"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      }
+    ],
+    "project": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342",
+    "context": {
+      "uiCron": {
+        "freq": "day",
+        "rate": 1,
+        "value": "0 29 22 */1 * *",
+        "isEntered": false,
+        "hourMins": 12,
+        "minuteSecs": 24,
+        "time": "2019-10-02T05:29:07.665Z",
+        "weekDays": [
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "monthDay": 1
+      },
+      "lensScenario": null,
+      "lensCreatedBy": "v-vasub",
+      "lensCreatedDate": "2019-10-01T22:33:54.622561Z",
+      "lensModifiedBy": "v-vasub",
+      "lensModifiedDate": "2019-10-01T23:20:34.1499703Z"
+    },
+    "failureWebhook": {
+      "url": "https://lens.msftcloudes.com/share/jobnotificationemail",
+      "aadResource": "aa0c39bf-5086-4900-bf89-6404bff62cf8",
+      "aadTenant": "microsoft.onmicrosoft.com"
+    }
+  },
+  "createdBy": "v-vasub",
+  "createdDate": "2019-10-01T22:33:54.622561Z",
+  "nextExecutionDate": "2019-10-03T22:29:00Z",
+  "modifiedBy": "v-vasub",
+  "modifiedDate": "2019-10-01T23:20:34.1499703Z",
+  "version": "3",
+  "isEnabled": true,
+  "isQuarantined": false,
+  "instances": [
+    {
+      "id": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342|4d6e01b46e5442fe8b2a7e36527c5d9e|T|2019-10-02T22:29:00.0000000Z",
+      "jobId": "4d6e01b46e5442fe8b2a7e36527c5d9e",
+      "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+      "status": "Failed",
+      "jobStatus": "5",
+      "errorMsg": "{\"exceptionMessage\":\"Specified cast is not valid.\",\"exceptionType\":\"Orchestrator.Exceptions.ActivityFailureException\",\"stackTrace\":\"   at FrontEnd.WorkerPools.WorkerPoolManager.<RunInstanceAsync>d__12.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\WorkerPools\\\\WorkerPoolManager.cs:line 451\\r\\n   at FrontEnd.WorkerPools.WorkerPoolManager.<RunAsync>d__10.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\WorkerPools\\\\WorkerPoolManager.cs:line 126\",\"innerException\":{\"exceptionMessage\":\"Specified cast is not valid.\",\"exceptionType\":\"Orchestrator.Exceptions.OrchestratorException\",\"stackTrace\":\"   at FrontEnd.Clients.WorkerPoolClient.ThrowWorkerException(HttpStatusCode statusCode, String contextName, ExceptionResponse exceptionResponse) in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\Clients\\\\WorkerPoolClient.cs:line 90\\r\\n   at FrontEnd.Clients.WorkerPoolClient.<GetOperationStatusAsync>d__9.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\Clients\\\\WorkerPoolClient.cs:line 277\\r\\n   at FrontEnd.WorkerPools.WorkerPoolManager.<WaitForOperationToCompleteAsync>d__14.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\WorkerPools\\\\WorkerPoolManager.cs:line 527\\r\\n   at FrontEnd.WorkerPools.WorkerPoolManager.<RunInstanceAsync>d__12.MoveNext() in D:\\\\a\\\\1\\\\s\\\\FrontEnd\\\\WorkerPools\\\\WorkerPoolManager.cs:line 372\",\"innerException\":{\"exceptionMessage\":\"Specified cast is not valid.\",\"exceptionType\":\"System.InvalidCastException\",\"stackTrace\":\"   at Shared.Clients.KustoClient.<GetSchemaAsync>d__32.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Shared\\\\Clients\\\\KustoClient.cs:line 382\\r\\n   at Worker.WorkerPools.DataStudioMovementWorkerPool.<CopyTableAsync>d__28.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Worker\\\\WorkerPools\\\\DataStudioMovementWorkerPool.cs:line 1515\\r\\n   at Worker.WorkerPools.DataStudioMovementWorkerPool.<RunActivityKustoToKustoAsync>d__27.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Worker\\\\WorkerPools\\\\DataStudioMovementWorkerPool.cs:line 1407\\r\\n   at Worker.WorkerPools.DataStudioMovementWorkerPool.<RunActivityAsync>d__21.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Worker\\\\WorkerPools\\\\DataStudioMovementWorkerPool.cs:line 1204\\r\\n   at Worker.Controllers.JobActivityController.<>c__DisplayClass10_0.<<RunActivityAsync>b__0>d.MoveNext() in D:\\\\a\\\\1\\\\s\\\\Worker\\\\Controllers\\\\JobActivityController.cs:line 350\"}}}",
+      "createdDate": "2019-10-02T22:29:00Z",
+      "startTime": "2019-10-02T22:29:00Z",
+      "endTime": "2019-10-02T22:29:05Z",
+      "elapsedTime": "2019-10-03T00:00:05.1637728Z",
+      "seed": "2019-10-01T22:29:00Z",
+      "logLink": "https://analytics.applicationinsights.io/subscriptions/56dcf710-f955-442e-8ac2-3b90ab65dea1/resourcegroups/datastudioorchestrator/components/datastudiojobs?q=H4sIAAAAAAAEAFWQQUsDMRCF74L%2fYW7dxVTSQLUtrCcVhCqCe5c0GWzKbjZNsrYL%2ffFOut3WnpKZN3lvvrTWNBYyj9sWQww5g0yjQ6vRKoPHOnqpMMABcB9JAI1RmipAAbqzsjYqs21V5ekp7hW6SI5p3PlmgypCNDVZy9oxaBx6mfTvN82AHiO5GGvR102IZeeQAQ0H%2bXMlvPctNkTntzcH2K3R45UjFAWMZqvXavu59Dv9UoxA0r7nfHiilWXE1MgEn8zHEz7mohRiIeYLzu%2bnD49iNhV3nFN1DBkYyoGB9j37MfjCX%2fQmdks6K5LC%2f5rBRw%2bYOBmcIGjqRMjg%2bfKT%2fS1xNV6jh1UHl0yNQf0BaM96YKkBAAA%3d&apptype=web",
+      "elapsedMilliseconds": 5163,
+      "parameters": {
+        "startDateTime": "2019-10-01T22:29:00Z",
+        "endDateTime": "2019-10-02T22:29:00Z"
+      },
+      "segments": [
+        {
+          "segmentId": "25994d61-4758-4e69-91ce-7f7b2a45a2b1",
+          "startTime": "2019-10-02T22:29:00.6297181Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "ClientAPI_Ops_Summary"
+        },
+        {
+          "segmentId": "21ccb65e-b046-4eaf-af60-d830a684c585",
+          "parameters": {},
+          "segmentName": "ClientAPI_TenantOps_Performance"
+        },
+        {
+          "segmentId": "b767e80f-7be9-4457-81f3-bf474d031b0b",
+          "parameters": {},
+          "segmentName": "ClientAPI-TenantOperations Performance"
+        },
+        {
+          "segmentId": "b0fce974-624f-4109-8e19-046fb51d06e3",
+          "parameters": {},
+          "segmentName": "Process data"
+        }
+      ],
+      "groupId": null
+    }
+  ],
+  "shareType": "shared",
+  "eTag": ""
+}

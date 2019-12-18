@@ -1,0 +1,67 @@
+{
+  "format": 1,
+  "restore": {
+    "C:\\Users\\v-vasub\\Documents\\Kusto Orchestrator\\KLD\\KLD.csproj": {}
+  },
+  "projects": {
+    "C:\\Users\\v-vasub\\Documents\\Kusto Orchestrator\\KLD\\KLD.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\Users\\v-vasub\\Documents\\Kusto Orchestrator\\KLD\\KLD.csproj",
+        "projectName": "KLD",
+        "projectPath": "C:\\Users\\v-vasub\\Documents\\Kusto Orchestrator\\KLD\\KLD.csproj",
+        "packagesPath": "C:\\Users\\v-vasub\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\v-vasub\\Documents\\Kusto Orchestrator\\KLD\\obj\\",
+        "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "C:\\Program Files\\dotnet\\sdk\\NuGetFallbackFolder"
+        ],
+        "configFilePaths": [
+          "C:\\Users\\v-vasub\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net472"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net472": {
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        }
+      },
+      "frameworks": {
+        "net472": {
+          "dependencies": {
+            "Microsoft.Azure.Kusto.Data": {
+              "target": "Package",
+              "version": "[8.0.0, )"
+            },
+            "Microsoft.Azure.Management.Kusto": {
+              "target": "Package",
+              "version": "[3.0.0, )"
+            },
+            "Microsoft.Rest.ClientRuntime": {
+              "target": "Package",
+              "version": "[2.3.21, )"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\3.0.100\\RuntimeIdentifierGraph.json"
+        }
+      },
+      "runtimes": {
+        "win7-x86": {
+          "#import": []
+        }
+      }
+    }
+  }
+}

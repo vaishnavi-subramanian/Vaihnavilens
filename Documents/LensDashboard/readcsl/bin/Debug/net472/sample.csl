@@ -1,0 +1,4 @@
+.create-or-alter  function Info_Sample(startTime:datetime, endTime:datetime)
+{
+cluster('masvaas').database('girdharb-livemigrationbalanced-rs5-release-svc-asdb-ft1-191210').['ClusterLog-ClusterBasicInfo']  | count
+}

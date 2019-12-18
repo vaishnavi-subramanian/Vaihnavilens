@@ -1,0 +1,18 @@
+﻿    .create-or-alter  function Info_Sample(startTime:datetime, endTime:datetime){
+    let view=datatable(Property:string,Value:dynamic)[];
+let viewFile=datatable(FileName:string)[];
+let latestInfoFile = toscalar((
+    union isfuzzy=true viewFile,cluster('{Cluster}').database('{Database}').['TextFileLogs'] 
+    | where FileName contains "AzureStackStampInformation" 
+    | distinct FileName 
+    | order by FileName 
+    | take 1));
+union isfuzzy=true view,(
+    cluster('{Cluster}').database('{Database}').['TextFileLogs']
+    | where FileName == latestInfoFile
+    | distinct LineNumber,FileLineContent
+    | order by LineNumber asc
+    | summarize StampInfo=(toobject(strcat_array(makelist(FileLineContent,100000), "\r\n")))
+    | mvexpand bagexpansion=array StampInfo
+    | project Property=tostring(StampInfo[0]), Value=StampInfo[1] )
+    }

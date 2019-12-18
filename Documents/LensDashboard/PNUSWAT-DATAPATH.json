@@ -1,0 +1,720 @@
+{
+  "id": "2a04652b2eaa4745b7439b13f181f8ea",
+  "name": "PNUSWAT-DataPath",
+  "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+  "provider": "Dso",
+  "scenario": "",
+  "description": "",
+  "tags": "",
+  "config": {
+    "jobName": "2a04652b2eaa4745b7439b13f181f8ea",
+    "jobDisplayName": "PNUSWAT-DataPath",
+    "jobDescription": "",
+    "tags": "",
+    "maxJobInstances": 1,
+    "isDebug": false,
+    "appendUtcIndicator": false,
+    "allocationType": 0,
+    "jobScheduleSettings": {
+      "scheduleType": "Frequency",
+      "frequencySettings": {
+        "cronSchedule": "0 35 18 */1 * *",
+        "backFill": false,
+        "monthly": false
+      }
+    },
+    "defaultICMAlerts": false,
+    "activities": [
+      {
+        "activityDisplayName": "PNUSWAT-TestAzS",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "e241a8fc-0c51-494b-9df7-5113ced0abad",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view = datatable(OccurrenceTime:datetime,SummaryInfo:string,SummaryFile:string,LogFile:string)[];\r\nlet searchFileNameRegex = @\"AzureStack_Validation_Trace_([_\\d\\.]*)(.log|.LOG)\";\r\nlet timeExtractionRegex = @\"(\\d{4}).(\\d{2}).(\\d{2})_(\\d{2}).(\\d{2}).(\\d{2})\";\r\nlet searchTerm = \"AzureStack Cloud Validation Result:\";\r\nlet replaceString = @\"\\1-\\2-\\3 \\4:\\5:\\6\";\r\nlet ExtractTimeFromFileName = (fileName:string){todatetime(replace(timeExtractionRegex,replaceString,extract(searchFileNameRegex,1,fileName)))};\r\nunion isfuzzy=true view,(\r\n    database('db').TextFileLogs\r\n    | where FileName matches regex searchFileNameRegex\r\n    | extend SummaryInfo=extract(@\"(\\d\\d\\/\\d\\d\\/\\d\\d\\d\\d \\d\\d:\\d\\d:\\d\\d) AzureStack Cloud Validation Result: (\\w*)\",2,FileLineContent)\r\n    | extend HostCluster=extract(@\"([A-Z.]*) Azure Stack Cloud Hosting Infrastructure Summary\",1,FileLineContent)\r\n    | extend InfraVMs=extract(@\"([A-Z.]*) Azure Stack Infrastructure Role Instance Summary\",1,FileLineContent)\r\n    | extend InfraCapacity=extract(@\"([A-Z.]*) Azure Stack Infrastructure Capacity\",1,FileLineContent)\r\n    | extend InfraSFClusters=extract(@\"([A-Z.]*) Infrastructure management controller, Network controller, Storage services, and Privileged endpoint Infrastructure Roles\",1,FileLineContent)\r\n    | extend InfraSFApps=extract(@\"([A-Z.]*) Azure Stack Infrastructure Role summary\",1,FileLineContent)\r\n    | extend InfraSFServices=extract(@\"([A-Z.]*) Azure Stack Cloud Service Fabric Services\",1,FileLineContent)\r\n    | extend SQL=extract(@\"([A-Z.]*) Azure Stack Data Store Cluster\",1,FileLineContent)\r\n    | extend Endpoints=extract(@\"([A-Z.]*) Azure Stack Portal and API Summary\",1,FileLineContent)\r\n    | extend PhysicalDisks=extract(@\"([A-Z.]*) Azure Stack Storage Services Physical Disks Summary\",1,FileLineContent)\r\n    | distinct FileName,SummaryInfo,HostCluster,InfraVMs,InfraCapacity,InfraSFClusters,InfraSFApps,InfraSFServices,SQL,Endpoints,PhysicalDisks\r\n    | extend AzsLogCollectionFolder=extract(@\"(AzureStackLogs-\\d*)\",1,FileName)\r\n    | extend OccurrenceTime = ExtractTimeFromFileName(FileName)\r\n    | extend LogFileName=iff(FileName endswith \".log\",FileName,\"\"),SummaryFileName=iff(FileName endswith \".html\",FileName,\"\")\r\n    | summarize SummaryInfo=any(SummaryInfo),SummaryFile=any(SummaryFileName),LogFile=any(LogFileName),HostCluster=any(HostCluster),InfraVMs=any(InfraVMs),InfraCapacity=any(InfraCapacity),InfraSFClusters=any(InfraSFClusters),InfraSFApps=any(InfraSFApps),InfraSFServices=any(InfraSFServices),SQL=any(SQL),Endpoints=any(Endpoints),PhysicalDisks=any(PhysicalDisks) by OccurrenceTime,AzsLogCollectionFolder\r\n    | extend SummaryInfo=iff(SummaryInfo!~\"pass\", strcat(\"<strong style='background-color:yellow;color:red'>\",SummaryInfo,\"</strong>\"),strcat(\"<strong style='color:green;'>\",SummaryInfo,\"</strong>\"))\r\n    | extend HostCluster=iff(HostCluster!~\"pass\", strcat(\"<strong style='background-color:yellow;color:red'>\",HostCluster,\"</strong>\"),strcat(\"<strong style='color:green;'>\",HostCluster,\"</strong>\"))\r\n    | extend InfraVMs=iff(InfraVMs!~\"pass\", strcat(\"<strong style='background-color:yellow;color:red'>\",InfraVMs,\"</strong>\"),strcat(\"<strong style='color:green;'>\",InfraVMs,\"</strong>\"))\r\n    | extend InfraCapacity=iff(InfraCapacity!~\"pass\", strcat(\"<strong style='background-color:yellow;color:red'>\",InfraCapacity,\"</strong>\"),strcat(\"<strong style='color:green;'>\",InfraCapacity,\"</strong>\"))\r\n    | extend InfraSFClusters=iff(InfraSFClusters!~\"pass\", strcat(\"<strong style='background-color:yellow;color:red'>\",InfraSFClusters,\"</strong>\"),strcat(\"<strong style='color:green;'>\",InfraSFClusters,\"</strong>\"))\r\n    | extend InfraSFApps=iff(InfraSFApps!~\"pass\", strcat(\"<strong style='background-color:yellow;color:red'>\",InfraSFApps,\"</strong>\"),strcat(\"<strong style='color:green;'>\",InfraSFApps,\"</strong>\"))\r\n    | extend InfraSFServices=iff(InfraSFServices!~\"pass\", strcat(\"<strong style='background-color:yellow;color:red'>\",InfraSFServices,\"</strong>\"),strcat(\"<strong style='color:green;'>\",InfraSFServices,\"</strong>\"))\r\n    | extend SQL=iff(SQL!~\"pass\", strcat(\"<strong style='background-color:yellow;color:red'>\",SQL,\"</strong>\"),strcat(\"<strong style='color:green;'>\",SQL,\"</strong>\"))\r\n    | extend Endpoints=iff(Endpoints!~\"pass\", strcat(\"<strong style='background-color:yellow;color:red'>\",Endpoints,\"</strong>\"),strcat(\"<strong style='color:green;'>\",Endpoints,\"</strong>\"))\r\n    | extend PhysicalDisks=iff(PhysicalDisks!~\"pass\", strcat(\"<strong style='background-color:yellow;color:red'>\",PhysicalDisks,\"</strong>\"),strcat(\"<strong style='color:green;'>\",PhysicalDisks,\"</strong>\"))\r\n    | order by OccurrenceTime desc\r\n    | take 1\r\n)\r\n| extend Cluster='{cluster}', Database='{database}'\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "PNUSWAT-Test-AZS"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "PNUSWAT - HyperV Tenant Impact  metric",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "7be4f609-886f-4db1-a2c7-c4163158fa29",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "        set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet schema=datatable(OccurrenceTime:datetime,MachineName:string,EventId:int,RecordId:long,EventType:string,Description:string,Succeeded:int,Failed:int,LongBlackout:int,Status:string, Interruption:long)[];\r\nlet HypervEvents = datatable(C_EventID:string,Category:string,EventDescription:string, InterruptionFlag:bool)\r\n        [\r\n            \"13002\",    \"vmCreated\",                        \"VM created successfully\",                                                  false,\r\n            \"13003\",    \"vmDeleted\",                        \"VM deleted successfully\",                                                  false,\r\n            \"18504\",    \"vmShutdownByForce\",                \"VM shutdown by force\",                                                     true,\r\n            \"18508\",    \"vmShudownByGuestOS\",               \"VM was shut down by the guest operating system\",                           false,\r\n            \"18590\",    \"HyperV-Critical-Error-OS/vmCrash\", \"Hyper-V Critical error in OS\",                                             true,\r\n            \"18514\",    \"vmResetByGuestOS\",                 \"VM was reset by Guest OS\",                                                 false,\r\n            \"18560\",    \"TripleFault\",                      \"MSVM_TRIPLE_FAULT_UNRECOVERABLE_EXCEPTION_EVENT_ID\",                       true,\r\n            \"12030\",    \"HyperV-VM-Start-Failure\",          \"HYPERV_START_FAILURE_EVENT_ID\",                                            true,\r\n            \"18512\",    \"vmCreated\",                        \"VM created successfully\",                                                  false,\r\n            \"18516\",    \"vmPaused\",                         \"VM paused\",                                                                true,\r\n            \"18518\",    \"vmResumed\",                        \"VM is resumed\",                                                            false,\r\n            \"12597\",    \"vmConnected\",                      \"Connected to virtual network\",                                             false,\r\n            \"12598\",    \"vmDisconnected\",                   \"Disconnected from virtual network\",                                        false,\r\n            \"18500\",    \"vmStarted\",                        \"VM started successfully(Microsoft-Windows-Hyper-V-Worker)\",                false,\r\n            \"12582\",    \"vmStartedSynthNic\",                \"VM started successfully(Microsoft-Windows-Hyper-V-SynthNic)\",              false,\r\n            \"18601\",    \"vmBooted\",                         \"VM successfully booted an operating system\",                               false,\r\n            \"18502\",    \"HyperV-Turned-Off\",                \"Hyper-V Turned off\",                                                       true,\r\n            \"18510\",    \"vmSaved\",                          \"VM saved sucessfully\",                                                     true,\r\n            \"18524\",    \"HyperVFault\",                      \"Hyper-V VM Paused for critical error\",                                     true,\r\n            \"18590\",    \"HyperVFault\",                      \"Hyper-V Critical error in OS\",                                             true,\r\n            \"24004\",    \"HyperVFault\",                      \"Hyper-V Processor-specific features not supported\",                        true,\r\n        ];\r\nlet HyperVEventDescriptionTable = datatable(EventId:int,Category:string,EventType:string)\r\n[\r\n    18502,\"HyperVFault\",\"Hyper-V VM Turned off\",\r\n    18510,\"HyperVFault\",\"Hyper-V VM Saved\",\r\n    18516,\"HyperVFault\",\"Hyper-V VM Paused\",\r\n    18524,\"HyperVFault\",\"Hyper-V VM Paused for critical error\",\r\n    18590,\"HyperVFault\",\"Hyper-V Critical error in OS\",\r\n    24004,\"HyperVFault\",\"Hyper-V Processor-specific features not supported\"\r\n];\r\nlet InterruptionList = HyperVEventDescriptionTable | summarize makeset(EventId);\r\nlet InterestingEvents = HypervEvents | summarize makeset(C_EventID);\r\nunion isfuzzy=true schema,(\r\n    database('db').['WindowsEventLogs']\r\n    | where LogName startswith \"Microsoft-Windows-Hyper-V\" and EventId in (InterestingEvents)\r\n    | extend VmName = tostring(Properties[0]), VmId = tostring(Properties[1])\r\n    | distinct VmName,VmId,OccurrenceTime,MachineName,EventId,RecordId,Description\r\n    | sort by VmName, VmId, OccurrenceTime asc \r\n    | extend Interruption = iif((VmName != next(VmName,1) or VmId != next(VmId,1) or next(EventId,1) == \"13003\") and EventId in (InterruptionList),\r\n                                iif(EventId in (\"18502\",\"18504\"), 0, 1),\r\n                                iif(EventId in (InterruptionList),1,0)\r\n                            )\r\n    | extend VmType = iff(strlen(VmName) >= 36, \"Tenant\", \"Infra\")\r\n    | where VmType == \"Tenant\"\r\n)\r\n| summarize sum(Interruption)"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "PNUSWAT_HyperV_Tenant_Impact_metric"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "PNUSWAT - HyperV Tenant Impact Failure Events Timelines",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "445b3893-9e17-4417-bcab-5f7d98523b80",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet schema=datatable(OccurrenceTime:datetime,EventType:string,count_:long)[];let HypervEvents = datatable(C_EventID:string,Category:string,EventDescription:string, InterruptionFlag:bool)\r\n        [\r\n            \"13002\",    \"vmCreated\",                        \"VM created successfully\",                                                  false,\r\n            \"13003\",    \"vmDeleted\",                        \"VM deleted successfully\",                                                  false,\r\n            \"18504\",    \"vmShutdownByForce\",                \"VM shutdown by force\",                                                     true,\r\n            \"18508\",    \"vmShudownByGuestOS\",               \"VM was shut down by the guest operating system\",                           false,\r\n            \"18590\",    \"HyperV-Critical-Error-OS/vmCrash\", \"Hyper-V Critical error in OS\",                                             true,\r\n            \"18514\",    \"vmResetByGuestOS\",                 \"VM was reset by Guest OS\",                                                 false,\r\n            \"18560\",    \"TripleFault\",                      \"MSVM_TRIPLE_FAULT_UNRECOVERABLE_EXCEPTION_EVENT_ID\",                       true,\r\n            \"12030\",    \"HyperV-VM-Start-Failure\",          \"HYPERV_START_FAILURE_EVENT_ID\",                                            true,\r\n            \"18512\",    \"vmCreated\",                        \"VM created successfully\",                                                  false,\r\n            \"18516\",    \"vmPaused\",                         \"VM paused\",                                                                true,\r\n            \"18518\",    \"vmResumed\",                        \"VM is resumed\",                                                            false,\r\n            \"12597\",    \"vmConnected\",                      \"Connected to virtual network\",                                             false,\r\n            \"12598\",    \"vmDisconnected\",                   \"Disconnected from virtual network\",                                        false,\r\n            \"18500\",    \"vmStarted\",                        \"VM started successfully(Microsoft-Windows-Hyper-V-Worker)\",                false,\r\n            \"12582\",    \"vmStartedSynthNic\",                \"VM started successfully(Microsoft-Windows-Hyper-V-SynthNic)\",              false,\r\n            \"18601\",    \"vmBooted\",                         \"VM successfully booted an operating system\",                               false,\r\n            \"18502\",    \"HyperV-Turned-Off\",                \"Hyper-V Turned off\",                                                       true,\r\n            \"18510\",    \"vmSaved\",                          \"VM saved sucessfully\",                                                     true,\r\n            \"18524\",    \"HyperVFault\",                      \"Hyper-V VM Paused for critical error\",                                     true,\r\n            \"18590\",    \"HyperVFault\",                      \"Hyper-V Critical error in OS\",                                             true,\r\n            \"24004\",    \"HyperVFault\",                      \"Hyper-V Processor-specific features not supported\",                        true,\r\n        ];\r\nlet HyperVEventDescriptionTable = datatable(EventId:int,Category:string,EventType:string)\r\n[\r\n    18502,\"HyperVFault\",\"Hyper-V VM Turned off\",\r\n    18510,\"HyperVFault\",\"Hyper-V VM Saved\",\r\n    18516,\"HyperVFault\",\"Hyper-V VM Paused\",\r\n    18524,\"HyperVFault\",\"Hyper-V VM Paused for critical error\",\r\n    18590,\"HyperVFault\",\"Hyper-V Critical error in OS\",\r\n    24004,\"HyperVFault\",\"Hyper-V Processor-specific features not supported\"\r\n];\r\nlet InterruptionList = HyperVEventDescriptionTable | summarize makeset(EventId);\r\nlet InterestingEvents = HypervEvents | summarize makeset(C_EventID);\r\nlet startTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStart'] | summarize min(OccurrenceTime));\r\nlet endTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStop'] | summarize max(OccurrenceTime));\r\nlet binval = 1h;\r\nlet zeroTimeTable =  (range count_ from 0 to 0 step 1\r\n    | mvexpand OccurrenceTime = range(startTime-binval, endTime+binval, binval) to typeof(datetime) limit 65536\r\n    | extend OccurrenceTime = bin(OccurrenceTime, binval),EventType=\"Timeline\");\r\nlet data=(\r\n    database('db').['WindowsEventLogs']\r\n    | where OccurrenceTime > startTime and OccurrenceTime < endTime\r\n    | where LogName startswith \"Microsoft-Windows-Hyper-V\" and EventId in (InterestingEvents)\r\n    | extend VmName = tostring(Properties[0]), VmId = tostring(Properties[1])\r\n    | distinct VmName,VmId,OccurrenceTime,MachineName,EventId,RecordId,Description\r\n    | sort by VmName, VmId, OccurrenceTime asc \r\n    | extend Interruption = iif((VmName != next(VmName,1) or VmId != next(VmId,1) or next(EventId,1) == \"13003\") and EventId in (InterruptionList),\r\n                                iif(EventId in (\"18502\",\"18504\"), 0, 1),\r\n                                iif(EventId in (InterruptionList),1,0)\r\n                            )\r\n    | where Interruption == 1\r\n    | join kind=inner HyperVEventDescriptionTable on EventId \r\n    | distinct OccurrenceTime,MachineName,EventId,RecordId,Description,Category,EventType,VmName,Interruption \r\n    | extend VmType = iff(strlen(VmName) >= 36, \"Tenant\", \"Infra\")\r\n    | where VmType == \"Tenant\"\r\n    | where not(isempty(MachineName) or (MachineName startswith  \"v-Host\"))\r\n    | summarize count_=count() by bin(OccurrenceTime, binval),EventType\r\n);\r\nunion isfuzzy=true schema,zeroTimeTable,data\r\n| sort by OccurrenceTime asc\r\n| summarize sum(count_) by bin(OccurrenceTime, time(1h)),tostring(EventType) | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "PNUSWAT - HyperV Tenant Impact Failure Events Timelines"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "PNUSWAT - HyperV LM Success Rate",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "7b10e113-8dd2-453a-8b4e-328259fe89ac",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet schema=datatable(OccurrenceTime:datetime,MachineName:string,EventId:int,RecordId:long,EventType:string,Description:string,Succeeded:int,Failed:int,LongBlackout:int,Status:string)[];\r\nlet HyperVEventDescriptionTable = datatable(EventId:int,Category:string,EventType:string)\r\n[\r\n    20415,\"vmMigrationSuccess\",\"MSVM_VMMS_MIGRATION_END_ONLINE_SOURCE\",\r\n    20416,\"vmMigrationSuccess\",\"MSVM_VMMS_MIGRATION_END_OFFLINE_SOURCE\",\r\n    20417,\"vmMigrationSuccessLongBlackout\",\"MSVM_VMMS_MIGRATION_END_ONLINE_LONG_BLACKOUT_SOURCE\",\r\n    20418,\"vmMigrationSuccess\",\"MSVM_VMMS_MIGRATION_END_ONLINE_DESTINATION\",\r\n    20419,\"vmMigrationSuccess\",\"MSVM_VMMS_MIGRATION_END_OFFLINE_DESTINATION\",\r\n    21024,\"vmMigrationFault\",\"MSVM_VMMS_MIGRATION_FAILURE_AT_SOURCE_ERROR\",\r\n    21025,\"vmMigrationFault\",\"MSVM_VMMS_MIGRATION_FAILURE_AT_SOURCE_ERROR_SUMMARY\",\r\n    21026,\"vmMigrationFault\",\"MSVM_VMMS_MIGRATION_FAILURE_AT_DESTINATION_ERROR\",\r\n    12050,\"HyperVFault\",\"Hyper-V Restore Failed\",\r\n    12320,\"HyperVFault\",\"Hyper-V Serial port open error\",\r\n    12630,\"HyperVFault\",\"Hyper-V VHD resiliency failed\",\r\n    18502,\"HyperVFault\",\"Hyper-V Turned off\",\r\n    18524,\"HyperVFault\",\"Hyper-V Paused for critical error\",\r\n    18590,\"HyperVFault\",\"Hyper-V Critical error in OS\",\r\n    24004,\"HyperVFault\",\"Hyper-V Processor-specific features not supported\"\r\n];\r\nunion isfuzzy=true schema,(\r\n    database('db').['WindowsEventLogs']\r\n    | where LogName startswith \"Microsoft-Windows-Hyper-V\"\r\n    | join kind=inner HyperVEventDescriptionTable on EventId \r\n    | distinct OccurrenceTime,MachineName,EventId,RecordId,Description,Category,EventType \r\n    | where not(isempty(MachineName) or (MachineName startswith  \"v-Host\"))\r\n    | where Category startswith \"vmMigration\"\r\n    | extend Succeeded=toint(Category startswith \"vmMigrationSuccess\"),Failed=toint(Category==\"vmMigrationFault\"),LongBlackout=toint(Category==\"vmMigrationSuccessLongBlackout\")\r\n    | extend Status=case(tobool(Succeeded), \"Succeeded\", tobool(Failed), \"Failed\", tobool(LongBlackout), \"LongBlackout\",\"\") \r\n    | where notempty(Status)\r\n)\r\n| summarize avg(Succeeded), sum(Succeeded), sum(LongBlackout), sum(Failed)"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "PNUSWAT - HyperV LM Success Rate"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "PNUSWAT - HyperV Live Migration Events Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "e3f9a31b-f826-4b0c-89bb-9ed1fca84616",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet schema=datatable(OccurrenceTime:datetime,Category:string,count_:long)[];\r\nlet HyperVEventDescriptionTable = datatable(EventId:int,Category:string,EventType:string)\r\n[\r\n    20415,\"vmMigrationSuccess\",\"MSVM_VMMS_MIGRATION_END_ONLINE_SOURCE\",\r\n    20416,\"vmMigrationSuccess\",\"MSVM_VMMS_MIGRATION_END_OFFLINE_SOURCE\",\r\n    20418,\"vmMigrationSuccess\",\"MSVM_VMMS_MIGRATION_END_ONLINE_DESTINATION\",\r\n    20419,\"vmMigrationSuccess\",\"MSVM_VMMS_MIGRATION_END_OFFLINE_DESTINATION\",\r\n    20417,\"vmMigrationLongBlackout\",\"MSVM_VMMS_MIGRATION_END_ONLINE_LONG_BLACKOUT_SOURCE\",\r\n    21024,\"vmMigrationFault\",\"MSVM_VMMS_MIGRATION_FAILURE_AT_SOURCE_ERROR\",\r\n    21025,\"vmMigrationFault\",\"MSVM_VMMS_MIGRATION_FAILURE_AT_SOURCE_ERROR_SUMMARY\",\r\n    21026,\"vmMigrationFault\",\"MSVM_VMMS_MIGRATION_FAILURE_AT_DESTINATION_ERROR\",\r\n];\r\nlet startTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStart'] | summarize min(OccurrenceTime));\r\nlet endTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStop'] | summarize max(OccurrenceTime));\r\nlet binval = 1h;\r\nlet zeroTimeTable =  (range count_ from 0 to 0 step 1\r\n    | mvexpand OccurrenceTime = range(startTime-binval, endTime+binval, binval) to typeof(datetime) limit 65536\r\n    | extend OccurrenceTime = bin(OccurrenceTime, binval),Category=\"Timeline\");\r\nlet data=(\r\n    database('db').['WindowsEventLogs']\r\n    | where OccurrenceTime > startTime and OccurrenceTime < endTime\r\n    | where LogName startswith \"Microsoft-Windows-Hyper-V\"\r\n    | join kind=inner HyperVEventDescriptionTable on EventId \r\n    | distinct OccurrenceTime,MachineName,EventId,RecordId,Description,Category,EventType \r\n    | where not(isempty(MachineName) or (MachineName startswith  \"v-Host\"))\r\n    | summarize count_=count() by bin(OccurrenceTime, binval),Category\r\n);\r\nunion isfuzzy=true schema,zeroTimeTable,data\r\n| sort by OccurrenceTime asc\r\n| summarize sum(count_) by bin(OccurrenceTime, time(1h)),tostring(Category) | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "PNUSWAT - HyperV Live Migration Events Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "PNUSWAT - HyperV Tenant Impact Events By EventType",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "6f9d1247-2810-42ca-b662-890e1edb6c9b",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet schema=datatable(OccurrenceTime:datetime,EventType:string,count_:long)[];\r\nlet HypervEvents = datatable(C_EventID:string,Category:string,EventDescription:string, InterruptionFlag:bool)\r\n        [\r\n            \"13002\",    \"vmCreated\",                        \"VM created successfully\",                                                  false,\r\n            \"13003\",    \"vmDeleted\",                        \"VM deleted successfully\",                                                  false,\r\n            \"18504\",    \"vmShutdownByForce\",                \"VM shutdown by force\",                                                     true,\r\n            \"18508\",    \"vmShudownByGuestOS\",               \"VM was shut down by the guest operating system\",                           false,\r\n            \"18590\",    \"HyperV-Critical-Error-OS/vmCrash\", \"Hyper-V Critical error in OS\",                                             true,\r\n            \"18514\",    \"vmResetByGuestOS\",                 \"VM was reset by Guest OS\",                                                 false,\r\n            \"18560\",    \"TripleFault\",                      \"MSVM_TRIPLE_FAULT_UNRECOVERABLE_EXCEPTION_EVENT_ID\",                       true,\r\n            \"12030\",    \"HyperV-VM-Start-Failure\",          \"HYPERV_START_FAILURE_EVENT_ID\",                                            true,\r\n            \"18512\",    \"vmCreated\",                        \"VM created successfully\",                                                  false,\r\n            \"18516\",    \"vmPaused\",                         \"VM paused\",                                                                true,\r\n            \"18518\",    \"vmResumed\",                        \"VM is resumed\",                                                            false,\r\n            \"12597\",    \"vmConnected\",                      \"Connected to virtual network\",                                             false,\r\n            \"12598\",    \"vmDisconnected\",                   \"Disconnected from virtual network\",                                        false,\r\n            \"18500\",    \"vmStarted\",                        \"VM started successfully(Microsoft-Windows-Hyper-V-Worker)\",                false,\r\n            \"12582\",    \"vmStartedSynthNic\",                \"VM started successfully(Microsoft-Windows-Hyper-V-SynthNic)\",              false,\r\n            \"18601\",    \"vmBooted\",                         \"VM successfully booted an operating system\",                               false,\r\n            \"18502\",    \"HyperV-Turned-Off\",                \"Hyper-V Turned off\",                                                       true,\r\n            \"18510\",    \"vmSaved\",                          \"VM saved sucessfully\",                                                     true,\r\n            \"18524\",    \"HyperVFault\",                      \"Hyper-V VM Paused for critical error\",                                     true,\r\n            \"18590\",    \"HyperVFault\",                      \"Hyper-V Critical error in OS\",                                             true,\r\n            \"24004\",    \"HyperVFault\",                      \"Hyper-V Processor-specific features not supported\",                        true,\r\n        ];\r\nlet HyperVEventDescriptionTable = datatable(EventId:int,Category:string,EventType:string)\r\n[\r\n    18502,\"HyperVFault\",\"Hyper-V VM Turned off\",\r\n    18510,\"HyperVFault\",\"Hyper-V VM Saved\",\r\n    18516,\"HyperVFault\",\"Hyper-V VM Paused\",\r\n    18524,\"HyperVFault\",\"Hyper-V VM Paused for critical error\",\r\n    18590,\"HyperVFault\",\"Hyper-V Critical error in OS\",\r\n    24004,\"HyperVFault\",\"Hyper-V Processor-specific features not supported\"\r\n];\r\nlet InterruptionList = HyperVEventDescriptionTable | summarize makeset(EventId);\r\nlet InterestingEvents = HypervEvents | summarize makeset(C_EventID);\r\nlet data=(\r\n    database('db').['WindowsEventLogs']\r\n    | where LogName startswith \"Microsoft-Windows-Hyper-V\" and EventId in (InterestingEvents)\r\n    | extend VmName = tostring(Properties[0]), VmId = tostring(Properties[1])\r\n    | distinct VmName,VmId,OccurrenceTime,MachineName,EventId,RecordId,Description\r\n    | sort by VmName, VmId, OccurrenceTime asc \r\n    | extend Interruption = iif((VmName != next(VmName,1) or VmId != next(VmId,1) or next(EventId,1) == \"13003\") and EventId in (InterruptionList),\r\n                                iif(EventId in (\"18502\",\"18504\"), 0, 1),\r\n                                iif(EventId in (InterruptionList),1,0)\r\n                            )\r\n    | where Interruption == 1\r\n    | join kind=inner HyperVEventDescriptionTable on EventId \r\n    | distinct OccurrenceTime,MachineName,EventId,RecordId,Description,Category,EventType,VmName \r\n    | extend VmType = iff(strlen(VmName) >= 36, \"Tenant\", \"Infra\")\r\n    | where VmType == \"Tenant\"\r\n);\r\nunion isfuzzy=true schema,data\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "PNUSWAT - HyperV Tenant Impact Events By EventType"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "PNUSWAT - Storage Data Path Success Rate",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "62e98b7f-d67a-4787-b027-b7f994498e01",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db =cluster('{cluster}').database('{database}');\r\nlet view=datatable(ServiceType:string,Availability:real) [];\r\nlet invalidStatus = dynamic([\"ServerTimeoutError\",\"AnonymousServerTimeoutError\",\"SASServerTimeoutError\",\"ServerOtherError\",\"UnknownError\",\"AnonymousServerOtherError\",\"SASServerOtherError\"]);\r\nlet isFailedRequest = (requestStatus: string){requestStatus in (invalidStatus)};\r\nunion isfuzzy=true view,(\r\n    database('db').['ETL-Microsoft-AzureStack-StorageService.RESTREQUESTPROCESSED']\r\n    | where ServiceType != \"\" \r\n    | extend isFailed = isFailedRequest(RequestStatus)\r\n    | summarize success = countif(isFailed == 0),total = countif(RequestStatus != \"UnknownError\") by ServiceType\r\n    | extend Availability = iif(success==0, 1.0, 1.0 * success /total)\r\n)\r\n| summarize avg(Availability) by tostring(ServiceType)"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "PNUSWAT - Storage Data Path Success Rate"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "PNUSWAT - ACS Storage Data Path Availability Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "f193664d-048a-45fc-94cd-9a4ac4ae81c3",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxrecords=20000;\r\nalias database db = cluster('masvaas').database('TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33');\r\nlet view=datatable(ServiceType:string,OccurrenceTime:datetime,Availability:real) [];\r\nlet invalidStatus = dynamic([\"ServerTimeoutError\",\"AnonymousServerTimeoutError\",\"SASServerTimeoutError\",\"ServerOtherError\",\"UnknownError\",\"AnonymousServerOtherError\",\"SASServerOtherError\"]);\r\nlet isFailedRequest = (requestStatus: string){requestStatus in (invalidStatus)};\r\nlet startTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStart'] | summarize min(OccurrenceTime));\r\nlet endTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStop'] | summarize max(OccurrenceTime));\r\nlet binval = 10m;\r\nlet overlapVal = 1h;\r\nlet zeroTimeTable =  (range Availability from 1 to 1 step 1\r\n    | mvexpand OccurrenceTime = range(startTime-overlapVal, endTime+overlapVal, binval) to typeof(datetime) limit 65536\r\n    | extend OccurrenceTime=bin(OccurrenceTime,binval),ServiceType=\"Timeline\",Availability=toreal(Availability));\r\nlet data=(\r\n    database('db').['ETL-Microsoft-AzureStack-StorageService.RESTREQUESTPROCESSED']\r\n    | where OccurrenceTime > startTime and OccurrenceTime < endTime\r\n    | where ServiceType != \"\" \r\n    | extend isFailed = isFailedRequest(RequestStatus)\r\n    | summarize success = countif(isFailed == 0),total = countif(RequestStatus != \"UnknownError\") by ServiceType, OccurrenceTime=bin(OccurrenceTime, 1m)\r\n    | extend Availability = iif(success==0, 1.0, 1.0 * success /total)\r\n);\r\nunion isfuzzy=true view,zeroTimeTable,data\r\n| sort by OccurrenceTime asc\r\n| project Availability,OccurrenceTime,ServiceType | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "PNUSWAT - ACS Storage Data Path Availability Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "PNUSWAT - Storage Data Path Errors",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "c429c6e0-8741-415b-931a-f4df09047de5",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nlet view=datatable(OccurrenceTime:datetime,HttpStatusCode:string,RequestStatus:string,OperationType:string,ServiceType:string,ClientRequestId:string,ETL:string,CosmosLogs:string,Database:string,Cluster:string)[];\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet invalidStatus = dynamic([\"ServerTimeoutError\",\"AnonymousServerTimeoutError\",\"SASServerTimeoutError\",\"ServerOtherError\",\"UnknownError\",\"AnonymousServerOtherError\",\"SASServerOtherError\"]);\r\nlet insideSLAStatus = dynamic([\"Success\",\"SASSuccess\"]);\r\nlet outsideSLAStatus = dynamic([\"SuccessOutsideSLA\",\"SASSuccessOutsideSLA\"]);\r\nlet isFailedRequest = (requestStatus: string){requestStatus in (invalidStatus)};\r\nunion isfuzzy=true view,(\r\ndatabase('db').['ETL-Microsoft-AzureStack-StorageService.RESTREQUESTPROCESSED']\r\n    | where isFailedRequest(RequestStatus)\r\n    | distinct OccurrenceTime,ActivityID,HttpStatusCode,RequestStatus,OperationType,ServiceType\r\n    | join kind=leftouter (\r\n        database('db').['ETL-Microsoft-AzureStack-StorageService.RESTREQUESTACCEPT']\r\n        | distinct ActivityID,ClientRequestId)\r\n        on ActivityID\r\n    | project OccurrenceTime, ClientRequestId,ActivityID,ETL=\"Search\",CosmosLogs=\"Search\",HttpStatusCode,RequestStatus,OperationType,ServiceType\r\n    | order by OccurrenceTime asc\r\n    | extend Cluster='{masvaas}', Database='{database}'\r\n)\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "PNUSWAT - Storage Data Path Errors"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "PNUSWAT - Operator Action Plan Success Rate",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "d5c08731-6be9-477e-b6d2-8b0974d7bff0",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "\r\nset query_take_max_records=5000;\r\nalias database db =cluster('{cluster}').database('{database}');\r\nlet view=datatable(ActionPlanStatus:string,ActionPlan:string,Duration:timespan,StartTime:datetime,StopTime:datetime,ActionPlanInstanceId:string,ActionPlanName:string,ActionPlanSuccess:int,ActionPlanFailed:int)[];\r\nunion isfuzzy=true view,(\r\n    union withsource=source database('db')\r\n    .['ETL-Microsoft-AzureStack-CloudEngine.ActionPlan*']\r\n    | distinct MachineName,EventName,OccurrenceTime,ActionPlanInstanceId,ActionPlanName,ActionPlanStatus,ActivityID\r\n    | extend ActionPlanInstanceId=tostring(ActionPlanInstanceId),MachineName=tostring(MachineName)\r\n    | summarize (StartTime,StartEventName)=arg_min(OccurrenceTime,EventName),(StopTime,ActionPlanStatus,StopEventName)=arg_max(OccurrenceTime,ActionPlanStatus,EventName),ActionPlanName=any(ActionPlanName),MachineName=any(MachineName) by ActionPlanInstanceId\r\n    | where StartEventName==\"ActionPlan/Start\" or StopEventName==\"ActionPlan/Stop\" \r\n    | where ActionPlanName != \"TestControlPlane\"\r\n    | project ActionPlanStatus,ActionPlan=strcat(ActionPlanName,\" (\",ActionPlanInstanceId,\")\"),Duration=StopTime-StartTime,StartTime,StopTime,ActionPlanInstanceId,ActionPlanName,MachineName\r\n    | extend ActionPlanSuccess=toint(ActionPlanStatus==\"Success\"), ActionPlanFailed=toint(ActionPlanStatus==\"Error\")\r\n)\r\n| summarize avg(ActionPlanSuccess), sum(ActionPlanSuccess), sum(ActionPlanFailed)"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "PNUSWAT - Operator Action Plan Success Rate"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "PNUSWAT - Operator Action Plan Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "0c4f9a35-3a34-4d32-8d23-a2e139037262",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(ActionPlan:string,OccurrenceTime:datetime,isActive:long) [];\r\nlet startTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStart'] | summarize min(OccurrenceTime));\r\nlet endTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStop'] | summarize max(OccurrenceTime));\r\nlet binval = 10m;\r\nlet overlapVal = 1h;\r\nlet zeroTimeTable =  (range isActive from 0 to 0 step 1\r\n    | mvexpand OccurrenceTime = range(startTime-overlapVal, endTime+overlapVal, binval) to typeof(datetime) limit 65536\r\n    | extend OccurrenceTime = bin(OccurrenceTime, binval),ActionPlan=\"Timeline\");\r\nlet data=(\r\n    database('db').['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStart']\r\n    | distinct ActivityID,EventName,OccurrenceTime,FormattedMessage,ActionPlanName,ActionPlanInstanceId\r\n    | where ActionPlanName != \"TestControlPlane\"\r\n    | summarize OccurrenceTime=min(OccurrenceTime) by ActionPlanName,ActionPlanInstanceId\r\n    | extend OccurrenceTime=pack_array(OccurrenceTime, OccurrenceTime+1s),isActive=pack_array(tolong(0),tolong(1))\r\n    | mvexpand OccurrenceTime,isActive \r\n    | project ActionPlan=strcat(ActionPlanName,\" (\",ActionPlanInstanceId,\")\"),todatetime(OccurrenceTime),tolong(isActive),ActionPlanInstanceId,ActionplanInstanceID=ActionPlanInstanceId\r\n    | union (\r\n    database('db').['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStop']\r\n    | distinct ActivityID,EventName,OccurrenceTime,FormattedMessage,ActionPlanName,ActionPlanInstanceId\r\n    | where ActionPlanName != \"TestControlPlane\"\r\n    | summarize OccurrenceTime=max(OccurrenceTime) by ActionPlanName,ActionPlanInstanceId\r\n    | extend OccurrenceTime=pack_array(OccurrenceTime, OccurrenceTime+1s),isActive=pack_array(tolong(1),tolong(0))\r\n    | mvexpand OccurrenceTime,isActive\r\n    | project ActionPlan=strcat(ActionPlanName,\" (\",ActionPlanInstanceId,\")\"),todatetime(OccurrenceTime),tolong(isActive),ActionPlanInstanceId,ActionplanInstanceID=ActionPlanInstanceId\r\n    )\r\n);\r\nunion isfuzzy=true view,zeroTimeTable,data\r\n| sort by OccurrenceTime asc\r\n| project isActive,OccurrenceTime,ActionPlan | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "PNUSWAT - Operator Action Plan Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "PNUSWAT - Operator Action Plan Summary - By ActionPlanStatus",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "b49426b9-718c-452e-9d4c-82cd8ab38674",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nlet view=datatable(ActionPlanStatus:string,ActionPlan:string,Duration:timespan,StartTime:datetime,StopTime:datetime,ActionPlanInstanceId:string,ActionPlanName:string,Database:string)[];\r\nunion isfuzzy=true view,(\r\n    union withsource=source cluster('{cluster}').database('{database}')\r\n    .['ETL-Microsoft-AzureStack-CloudEngine.ActionPlan*']\r\n    | extend Database=extract(\"database\\\\(\\\\\\\"([\\\\w-.]*)\\\\\\\"\\\\)\",1,source)\r\n    | distinct MachineName,EventName,OccurrenceTime,ActionPlanInstanceId,ActionPlanName,ActionPlanStatus,ActivityID,Database\r\n    | extend ActionPlanInstanceId=tostring(ActionPlanInstanceId),MachineName=tostring(MachineName)\r\n    | summarize (StartTime,StartEventName)=arg_min(OccurrenceTime,EventName),(StopTime,ActionPlanStatus,StopEventName)=arg_max(OccurrenceTime,ActionPlanStatus,EventName),ActionPlanName=any(ActionPlanName),MachineName=any(MachineName) by ActionPlanInstanceId,Database\r\n    | where StartEventName==\"ActionPlan/Start\" or StopEventName==\"ActionPlan/Stop\" \r\n    | where ActionPlanName != \"TestControlPlane\"\r\n    | project ActionPlanStatus,ActionPlan=strcat(ActionPlanName,\" (\",ActionPlanInstanceId,\")\"),Duration=StopTime-StartTime,StartTime,StopTime,ActionPlanInstanceId,ActionPlanName,Database,MachineName\r\n    | extend Cluster='{cluster}'\r\n    | order by ActionPlanStatus asc\r\n)"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "PNUSWAT - Operator Action Plan Summary - By ActionPlanStatus"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "PNUSWAT - CSV Migration metric",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "0fe24176-fbd2-4fb0-96fe-178b2d98128b",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet schema=datatable(OccurrenceTime:datetime,Volume:string,VolumeID:string,OfflineTime:datetime,OnlineTime:datetime,OfflineDurationSec:long)[];\r\nlet CsvFsEventIds = dynamic([9216,8960,9296,8704]);\r\nlet AllEvent = union withsource=DB database('db').table(\"WindowsEventLogs\")\r\n| where MachineName notcontains \"v-Host\" and ProviderName == \"Microsoft-Windows-FailoverClustering-CsvFs-Diagnostic\" and EventId in (CsvFsEventIds)\r\n| project EventId,Properties,Machine = replace(\"\\\\..*\",\"\",MachineName),OccurrenceTime,DB=substring(DB,10,49)\r\n| project EventId,Properties,Machine,OccurrenceTime,DB;\r\nlet VolumeOnline = AllEvent \r\n| where EventId == 9216 and Properties[2] == 4\r\n| project VolumeID=tostring(Properties[1]), Machine,OnlineTime = OccurrenceTime\r\n| distinct VolumeID,Machine,OnlineTime\r\n| extend OccurrenceTime=OnlineTime\r\n| extend State=\"Online\";\r\nlet VolumeOffline = AllEvent \r\n| where (EventId == 8960 and (Properties[2] == 4 or Properties[2] == 0)) or (EventId == 9296)\r\n| project VolumeID=tostring(Properties[1]), Machine,OfflineTime = OccurrenceTime, StateFrom = tostring(Properties[2]), StateTo = tostring(Properties[3])\r\n| distinct VolumeID,Machine,OfflineTime,StateFrom,StateTo\r\n| extend OccurrenceTime=OfflineTime\r\n| extend State=\"Offline\";\r\nlet VolumeIDs = AllEvent \r\n| where EventId == 8704 and Properties[1] contains \"-\"\r\n| project VolumeID=tostring(Properties[1]), Volume=tostring(Properties[5])\r\n| distinct VolumeID,Volume;\r\nlet VolumeTransitions =\r\nVolumeOffline\r\n| union VolumeOnline\r\n| join kind=leftouter (VolumeIDs) on VolumeID\r\n| order by OccurrenceTime asc \r\n| extend OccurrenceTimeBin = bin(OccurrenceTime, 1s)\r\n| distinct VolumeID,Volume, OccurrenceTimeBin,State;\r\nunion isfuzzy=true schema,(VolumeTransitions\r\n    | where State==\"Offline\"\r\n    | project Volume,VolumeID,OfflineTime=OccurrenceTimeBin\r\n    | join kind=leftouter (\r\n        VolumeTransitions\r\n        | where State==\"Online\"\r\n        | project VolumeID, OnlineTime=OccurrenceTimeBin) on VolumeID\r\n    | where OnlineTime > OfflineTime \r\n    | summarize OnlineTime = min(OnlineTime) by Volume,VolumeID,OfflineTime\r\n    | extend OfflineDurationSec = tolong((OnlineTime-OfflineTime)/1s),OccurrenceTime=OfflineTime\r\n)\r\n| summarize count_=count(), percentiles(OfflineDurationSec,50,95)"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "PNUSWAT - CSV Migration metric"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "PNUSWAT - CSV Migration Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "6a83f75f-f25f-4071-9e4e-fcaa40d0a19f",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet schema=datatable(OccurrenceTime:datetime,Volume:string,VolumeID:string,OfflineTime:datetime,OnlineTime:datetime,OfflineDurationMs:long)[];\r\nlet CsvFsEventIds = dynamic([9216,8960,9296,8704]);\r\nlet startTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStart'] | summarize min(OccurrenceTime));\r\nlet endTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-AzureStack-CloudEngine.ActionPlanStop'] | summarize max(OccurrenceTime));\r\nlet binval = 1h;\r\nlet zeroTimeTable =  (range count_ from 0 to 0 step 1\r\n    | mvexpand OccurrenceTime = range(startTime-binval, endTime+binval, binval) to typeof(datetime) limit 65536\r\n    | extend OccurrenceTime = bin(OccurrenceTime, binval),EventType=\"Timeline\");\r\nlet AllEvent = union withsource=DB database('db').table(\"WindowsEventLogs\")\r\n| where MachineName notcontains \"v-Host\" and ProviderName == \"Microsoft-Windows-FailoverClustering-CsvFs-Diagnostic\" and EventId in (CsvFsEventIds)\r\n| project EventId,Properties,Machine = replace(\"\\\\..*\",\"\",MachineName),OccurrenceTime,DB=substring(DB,10,49)\r\n| project EventId,Properties,Machine,OccurrenceTime,DB;\r\nlet VolumeOnline = AllEvent \r\n| where EventId == 9216 and Properties[2] == 4\r\n| project VolumeID=tostring(Properties[1]), Machine,OnlineTime = OccurrenceTime\r\n| distinct VolumeID,Machine,OnlineTime\r\n| extend OccurrenceTime=OnlineTime\r\n| extend State=\"Online\";\r\nlet VolumeOffline = AllEvent \r\n| where (EventId == 8960 and (Properties[2] == 4 or Properties[2] == 0)) or (EventId == 9296)\r\n| project VolumeID=tostring(Properties[1]), Machine,OfflineTime = OccurrenceTime, StateFrom = tostring(Properties[2]), StateTo = tostring(Properties[3])\r\n| distinct VolumeID,Machine,OfflineTime,StateFrom,StateTo\r\n| extend OccurrenceTime=OfflineTime\r\n| extend State=\"Offline\";\r\nlet VolumeIDs = AllEvent \r\n| where EventId == 8704 and Properties[1] contains \"-\"\r\n| project VolumeID=tostring(Properties[1]), Volume=tostring(Properties[5])\r\n| distinct VolumeID,Volume;\r\nlet VolumeTransitions =\r\nVolumeOffline\r\n| union VolumeOnline\r\n| join kind=leftouter (VolumeIDs) on VolumeID\r\n| extend OccurrenceTimeBin = bin(OccurrenceTime, 1s)\r\n| distinct VolumeID,Volume, OccurrenceTimeBin,State;\r\nunion isfuzzy=true schema,zeroTimeTable,(VolumeTransitions\r\n    | where State==\"Offline\"\r\n    | project Volume,VolumeID,OfflineTime=OccurrenceTimeBin\r\n    | join kind=leftouter (\r\n        VolumeTransitions\r\n        | where State==\"Online\"\r\n        | project VolumeID, OnlineTime=OccurrenceTimeBin) on VolumeID\r\n    | where OnlineTime > OfflineTime \r\n    | summarize OnlineTime = min(OnlineTime) by Volume,VolumeID,OfflineTime\r\n    | extend OfflineDurationMs = tolong((OnlineTime-OfflineTime)/1s),OccurrenceTime=OfflineTime\r\n    | extend EventType=\"CSV Migration\"\r\n    | where OccurrenceTime between (startTime..endTime)\r\n    | summarize count() by bin(OccurrenceTime,binval),EventType\r\n)\r\n| summarize sum(count_) by bin(OccurrenceTime, time(1h)),tostring(EventType) | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "PNUSWAT - CSV Migration Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "PNUSWAT - CSV Volume States",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "3bb6f0df-e5a3-4fef-a153-60f522941b32",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet schema=datatable(FinalState:string,Volume:string,VolumeID:string,LongestOfflineDurationSec:long,OfflineTime:datetime)[];\r\nlet CsvFsEventIds = dynamic([9216,8960,9296,8704]);\r\nlet AllEvent = union withsource=DB database('db').table(\"WindowsEventLogs\")\r\n| where MachineName notcontains \"v-Host\" and ProviderName == \"Microsoft-Windows-FailoverClustering-CsvFs-Diagnostic\" and EventId in (CsvFsEventIds)\r\n| project EventId,Properties,Machine = replace(\"\\\\..*\",\"\",MachineName),OccurrenceTime,DB=substring(DB,10,49)\r\n| project EventId,Properties,Machine,OccurrenceTime,DB;\r\nlet VolumeOnline = AllEvent \r\n| where EventId == 9216 and Properties[2] == 4\r\n| project VolumeID=tostring(Properties[1]), Machine,OnlineTime = OccurrenceTime\r\n| distinct VolumeID,Machine,OnlineTime\r\n| extend OccurrenceTime=OnlineTime\r\n| extend State=\"Online\";\r\nlet VolumeOffline = AllEvent \r\n| where (EventId == 8960 and (Properties[2] == 4 or Properties[2] == 0)) or (EventId == 9296)\r\n| project VolumeID=tostring(Properties[1]), Machine,OfflineTime = OccurrenceTime, StateFrom = tostring(Properties[2]), StateTo = tostring(Properties[3])\r\n| distinct VolumeID,Machine,OfflineTime,StateFrom,StateTo\r\n| extend OccurrenceTime=OfflineTime\r\n| extend State=\"Offline\";\r\nlet VolumeIDs = AllEvent \r\n| where EventId == 8704 and Properties[1] contains \"-\"\r\n| project VolumeID=tostring(Properties[1]), Volume=tostring(Properties[5])\r\n| distinct VolumeID,Volume;\r\nlet VolumeTransitions =\r\nVolumeOffline\r\n| union VolumeOnline\r\n| join kind=leftouter (VolumeIDs) on VolumeID\r\n| order by OccurrenceTime asc \r\n| extend OccurrenceTimeBin = bin(OccurrenceTime, 1s)\r\n| distinct VolumeID,Volume,OccurrenceTimeBin,State\r\n| project VolumeID,Volume,OccurrenceTime=OccurrenceTimeBin,State\r\n;\r\nlet OfflineWindows = VolumeTransitions\r\n    | where State==\"Offline\"\r\n    | extend OccurrenceTime = bin(OccurrenceTime, 1s)\r\n    | project Volume,VolumeID,OfflineTime=OccurrenceTime\r\n    | join kind=leftouter (\r\n        VolumeTransitions\r\n        | where State==\"Online\"\r\n        | project VolumeID, OnlineTime=OccurrenceTime) on VolumeID\r\n    | where OnlineTime > OfflineTime \r\n    | summarize OnlineTime = min(OnlineTime) by Volume,VolumeID,OfflineTime\r\n    | extend OfflineDurationSec = tolong((OnlineTime-OfflineTime)/1s),OccurrenceTime=OfflineTime\r\n    ;\r\nVolumeTransitions\r\n| summarize (FinalState,OccurrenceTime)=arg_max(State,OccurrenceTime) by Volume,VolumeID\r\n| join kind=leftouter (\r\n    OfflineWindows\r\n    | summarize (LongestOfflineDurationSec,OfflineTime)=arg_max(OfflineDurationSec,OccurrenceTime) by Volume\r\n) on Volume\r\n| project-away Volume1,OccurrenceTime \r\n| order by FinalState,Volume desc\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "PNUSWAT - CSV Volume States"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "PNUSWAT - Additional Analysis Links",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "28c34766-7047-450d-b8a0-97cdab61a98b",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nlet filters = datatable(DrillDownLink:string,Url:string,Workspace:string,AdditionalParameters:string)\r\n[\r\n    \"PNUSWAT Advanced Analysis\",\"https://lens.msftcloudes.com/v2/#/dashboard/3e521844-1e97-4d6d-81a0-34a2ceab0573\",\"41e3a7fb-2e62-4718-b30b-029b2d1e443d\",\"\",\r\n    \"Hyper-V Events\",\"https://lens.msftcloudes.com/v2/#/dashboard/Cluster%20Analytics\",\"4fe890dc-dd39-4efa-b3cd-aa0867adc86a\",\"&sectionId=6b7415c6-c72e-4c67-a0da-ffa172a73077\",\r\n    \"Clustering Events\",\"https://lens.msftcloudes.com/v2/#/dashboard/Cluster%20Analytics\",\"4fe890dc-dd39-4efa-b3cd-aa0867adc86a\",\"&sectionId=887adb5b-cb74-4758-87c7-a56aea0b90fe\",\r\n];\r\nfilters\r\n| extend Cluster='{cluster}', Database='{database}',StartTime=todatetime(ago(1d * 365 * 10)),EndTime=todatetime(now())\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "PNUSWAT - Additional Analysis Links"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      }
+    ],
+    "project": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342",
+    "context": {
+      "uiCron": {
+        "freq": "day",
+        "rate": 1,
+        "value": "0 35 18 */1 * *",
+        "isEntered": false,
+        "hourMins": 45,
+        "minuteSecs": 56,
+        "time": "2019-10-02T01:35:08.862Z",
+        "weekDays": [
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "monthDay": 1
+      },
+      "lensScenario": null,
+      "lensCreatedBy": "v-vasub",
+      "lensCreatedDate": "2019-10-01T18:48:58.7812437Z",
+      "lensModifiedBy": "v-vasub",
+      "lensModifiedDate": "2019-10-02T18:16:53.7848533Z"
+    },
+    "failureWebhook": {
+      "url": "https://lens.msftcloudes.com/share/jobnotificationemail",
+      "aadResource": "aa0c39bf-5086-4900-bf89-6404bff62cf8",
+      "aadTenant": "microsoft.onmicrosoft.com"
+    }
+  },
+  "createdBy": "v-vasub",
+  "createdDate": "2019-10-01T18:48:58.7812437Z",
+  "nextExecutionDate": "2019-10-03T18:35:00Z",
+  "modifiedBy": "v-vasub",
+  "modifiedDate": "2019-10-02T18:16:53.7848533Z",
+  "version": "39",
+  "isEnabled": true,
+  "isQuarantined": false,
+  "instances": [
+    {
+      "id": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342|2a04652b2eaa4745b7439b13f181f8ea|T|2019-10-02T18:35:00.0000000Z",
+      "jobId": "2a04652b2eaa4745b7439b13f181f8ea",
+      "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+      "status": "Succeeded",
+      "jobStatus": "0",
+      "errorMsg": null,
+      "createdDate": "2019-10-02T18:35:01Z",
+      "startTime": "2019-10-02T18:35:04Z",
+      "endTime": "2019-10-02T18:38:05Z",
+      "elapsedTime": "2019-10-03T00:03:03.9262882Z",
+      "seed": "2019-10-01T18:35:00Z",
+      "logLink": "https://analytics.applicationinsights.io/subscriptions/56dcf710-f955-442e-8ac2-3b90ab65dea1/resourcegroups/datastudioorchestrator/components/datastudiojobs?q=H4sIAAAAAAAEAFWQQU%2fDMAyF70j8B9%2fWiQwl64agUjkgLkjAJOh9ComBoDYNSQqrtB%2bPs64bOyX2c97zl86a1kLm8bvDEMOUQabRodVolcFdHb1UGGALuIkkgMYoTR2gBN1b2RiV2a6up%2bkpbhS6SI5p3Pn2C1WEaBqylo1j0Dr0MunrB82AHiO5GGvRN22IVe%2bQAQ0H%2bXEiPA0tNkZPz8%2b28PuJHk8coSxhcletVi%2fvlRRxUU5A0r6HfLillWXE1MjmXNzMBJ%2fxeSWui3xZcHG54CLPr5YXnBec70JGhmpkoH0Pfgxe8Qe9if0jnTVJ4X%2fN4HkATJwM9hA0tSdkcH%2f8yeGWuFqv0cNbD8dMjUH9AVk4Bk2pAQAA&apptype=web",
+      "elapsedMilliseconds": 183926,
+      "parameters": {
+        "startDateTime": "2019-10-01T18:35:00Z",
+        "endDateTime": "2019-10-02T18:35:00Z"
+      },
+      "segments": [
+        {
+          "segmentId": "e241a8fc-0c51-494b-9df7-5113ced0abad",
+          "startTime": "2019-10-02T18:35:04.4312058Z",
+          "endTime": "2019-10-02T18:35:24.3260644Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "PNUSWAT-TestAzS"
+        },
+        {
+          "segmentId": "7be4f609-886f-4db1-a2c7-c4163158fa29",
+          "startTime": "2019-10-02T18:35:24.3588217Z",
+          "endTime": "2019-10-02T18:35:33.5103024Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "PNUSWAT - HyperV Tenant Impact  metric"
+        },
+        {
+          "segmentId": "445b3893-9e17-4417-bcab-5f7d98523b80",
+          "startTime": "2019-10-02T18:35:33.5415682Z",
+          "endTime": "2019-10-02T18:35:42.2702796Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "PNUSWAT - HyperV Tenant Impact Failure Events Timelines"
+        },
+        {
+          "segmentId": "7b10e113-8dd2-453a-8b4e-328259fe89ac",
+          "startTime": "2019-10-02T18:35:42.3031269Z",
+          "endTime": "2019-10-02T18:35:51.4688471Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "PNUSWAT - HyperV LM Success Rate"
+        },
+        {
+          "segmentId": "e3f9a31b-f826-4b0c-89bb-9ed1fca84616",
+          "startTime": "2019-10-02T18:35:51.4844896Z",
+          "endTime": "2019-10-02T18:36:00.2541244Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "PNUSWAT - HyperV Live Migration Events Timeline"
+        },
+        {
+          "segmentId": "6f9d1247-2810-42ca-b662-890e1edb6c9b",
+          "startTime": "2019-10-02T18:36:00.2697924Z",
+          "endTime": "2019-10-02T18:36:19.3497178Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "PNUSWAT - HyperV Tenant Impact Events By EventType"
+        },
+        {
+          "segmentId": "62e98b7f-d67a-4787-b027-b7f994498e01",
+          "startTime": "2019-10-02T18:36:19.3653753Z",
+          "endTime": "2019-10-02T18:36:40.2905794Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "PNUSWAT - Storage Data Path Success Rate"
+        },
+        {
+          "segmentId": "f193664d-048a-45fc-94cd-9a4ac4ae81c3",
+          "startTime": "2019-10-02T18:36:40.321864Z",
+          "endTime": "2019-10-02T18:36:48.7666884Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "PNUSWAT - ACS Storage Data Path Availability Timeline"
+        },
+        {
+          "segmentId": "c429c6e0-8741-415b-931a-f4df09047de5",
+          "startTime": "2019-10-02T18:36:48.8135313Z",
+          "endTime": "2019-10-02T18:37:08.9502421Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "PNUSWAT - Storage Data Path Errors"
+        },
+        {
+          "segmentId": "d5c08731-6be9-477e-b6d2-8b0974d7bff0",
+          "startTime": "2019-10-02T18:37:08.9658431Z",
+          "endTime": "2019-10-02T18:37:17.7622779Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "PNUSWAT - Operator Action Plan Success Rate"
+        },
+        {
+          "segmentId": "0c4f9a35-3a34-4d32-8d23-a2e139037262",
+          "startTime": "2019-10-02T18:37:17.8091204Z",
+          "endTime": "2019-10-02T18:37:27.7154277Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "PNUSWAT - Operator Action Plan Timeline"
+        },
+        {
+          "segmentId": "b49426b9-718c-452e-9d4c-82cd8ab38674",
+          "startTime": "2019-10-02T18:37:27.7508541Z",
+          "endTime": "2019-10-02T18:37:33.9514451Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "PNUSWAT - Operator Action Plan Summary - By ActionPlanStatus"
+        },
+        {
+          "segmentId": "0fe24176-fbd2-4fb0-96fe-178b2d98128b",
+          "startTime": "2019-10-02T18:37:34.0008897Z",
+          "endTime": "2019-10-02T18:37:42.5248888Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "PNUSWAT - CSV Migration metric"
+        },
+        {
+          "segmentId": "6a83f75f-f25f-4071-9e4e-fcaa40d0a19f",
+          "startTime": "2019-10-02T18:37:42.5405493Z",
+          "endTime": "2019-10-02T18:37:50.6895256Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "PNUSWAT - CSV Migration Timeline"
+        },
+        {
+          "segmentId": "3bb6f0df-e5a3-4fef-a153-60f522941b32",
+          "startTime": "2019-10-02T18:37:50.7207582Z",
+          "endTime": "2019-10-02T18:37:58.2767542Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "PNUSWAT - CSV Volume States"
+        },
+        {
+          "segmentId": "28c34766-7047-450d-b8a0-97cdab61a98b",
+          "startTime": "2019-10-02T18:37:58.3236782Z",
+          "endTime": "2019-10-02T18:38:01.8868005Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "PNUSWAT - Additional Analysis Links"
+        }
+      ],
+      "groupId": null
+    }
+  ],
+  "shareType": "shared",
+  "eTag": ""
+}

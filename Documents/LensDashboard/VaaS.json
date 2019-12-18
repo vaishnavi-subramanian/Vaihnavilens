@@ -1,0 +1,512 @@
+{
+  "id": "cf4b8f6080304447bea366d6f4caf864",
+  "name": "VaaS",
+  "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+  "provider": "Dso",
+  "scenario": "",
+  "description": "",
+  "tags": "",
+  "config": {
+    "jobName": "cf4b8f6080304447bea366d6f4caf864",
+    "jobDisplayName": "VaaS",
+    "jobDescription": "",
+    "tags": "",
+    "maxJobInstances": 1,
+    "isDebug": false,
+    "appendUtcIndicator": false,
+    "allocationType": 0,
+    "jobScheduleSettings": {
+      "scheduleType": "Frequency",
+      "frequencySettings": {
+        "cronSchedule": "0 38 20 */1 * *",
+        "backFill": false,
+        "monthly": false
+      }
+    },
+    "defaultICMAlerts": false,
+    "activities": [
+      {
+        "activityDisplayName": "VaaS - Test Case Throughput timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "8e9ddff7-3831-4fe8-931e-83d2032c154c",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(Succeeded:long,Failed:long,OccurrenceTime:datetime) [];\r\nlet startTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-VaaS*'] | summarize min(OccurrenceTime));\r\nlet endTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-VaaS*'] | summarize max(OccurrenceTime));\r\nlet binval = 10m;\r\nlet zeroTimeTable =  (range x from 1 to 1 step 1\r\n    | mvexpand OccurrenceTime = range(startTime, endTime, binval) to typeof(datetime));\r\nunion isfuzzy=true view,(database(\"db\").['ETL-Microsoft-VaaS-TestSuite.TestCaseStop']\r\n| where OccurrenceTime>startTime and OccurrenceTime<endTime\r\n| project OccurrenceTime,TestCaseName,IsSuccess,ErrorMessage,id=tostring(Properties.id)\r\n| distinct OccurrenceTime,TestCaseName,IsSuccess,ErrorMessage,id\r\n| extend Status=iff(IsSuccess,\"Succeeded\",\"Failed\")\r\n| union zeroTimeTable\r\n| summarize \r\n    Succeeded=countif(Status==\"Succeeded\"),\r\n    Failed=countif(Status==\"Failed\") by bin(OccurrenceTime, binval))\r\n| summarize sum(Succeeded), sum(Failed) by bin(OccurrenceTime, time(10m)) | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "VaaS - Test Case Throughput timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "VaaS - Admin Actions Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "efae39ae-4c64-4e70-a9e9-fdca933e7af5",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(AdminOperationName:string,OccurrenceTime:datetime,Result:int) [];\r\nlet startTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-VaaS*'] | summarize min(OccurrenceTime));\r\nlet endTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-VaaS*'] | summarize max(OccurrenceTime));\r\nlet bintype = 10m;\r\nlet zeroTimeTable =  (range x from 1 to 1 step 1 | mvexpand OccurrenceTime = range(startTime, endTime, bintype) to typeof(datetime) limit 8640);\r\nlet VaasAdminOpTimeline = (\r\nunion isfuzzy=true view,(database('db').['ETL-Microsoft-VaaS-AdminOpOrchestrator.AdminOrchestratorOperationStart']\r\n| project StartTime=OccurrenceTime,AdminOperationName,CorrelationId\r\n| distinct *\r\n| join (\r\n    database('db').['ETL-Microsoft-VaaS-AdminOpOrchestrator.AdminOrchestratorOperationStop']\r\n    | project EndTime=OccurrenceTime,CorrelationId,Result\r\n    | distinct *\r\n    ) on CorrelationId\r\n| project Result,isValue=1,AdminOperationName,StartTime,EndTime\r\n| mvexpand OccurrenceTime = range(StartTime, EndTime, bintype) to typeof(datetime)\r\n| project OccurrenceTime, AdminOperationName, Result));\r\nunion VaasAdminOpTimeline, zeroTimeTable\r\n| summarize Count=iff(countif(isempty(AdminOperationName)==false) == 0, 0, 1) by  bin(OccurrenceTime, bintype),Result,AdminOperationName\r\n| summarize sum(Count) by bin(OccurrenceTime, time(10m)),tostring(AdminOperationName) | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "VaaS - Admin Actions Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "VaaS - Test-AzureStack Health Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "adb1b8eb-6f46-4643-bdee-35162b297766",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet searchFileName = \"AzureStack_Validation_Trace\";\r\nlet searchTerm = \"AzureStack Cloud Validation Result:\";\r\nlet searchFileNameRegex = @\"AzureStack_Validation_Trace_([_\\d\\.]*)(.log|.LOG)\";\r\nlet timeExtractionRegex = @\"(\\d{4}).(\\d{2}).(\\d{2})_(\\d{2}).(\\d{2}).(\\d{2})\";\r\nlet replaceString = @\"\\1-\\2-\\3 \\4:\\5:\\6\";\r\nlet ExtractTimeFromFileName = (fileName:string){todatetime(replace(timeExtractionRegex,replaceString,extract(searchFileNameRegex,1,fileName)))};\r\nlet view = datatable(OccurrenceTime:datetime,Source:string,Healthy:long) [];\r\nlet startTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-VaaS*'] | summarize min(OccurrenceTime));\r\nlet endTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-VaaS*'] | summarize max(OccurrenceTime));\r\nlet binval = 10m;\r\nlet zeroTimeTable =  (range Healthy from 0 to 0 step 1\r\n    | extend Source=\"Timeline\"\r\n    | mvexpand OccurrenceTime = range(startTime, endTime, binval) to typeof(datetime) limit 65536\r\n    | extend OccurrenceTime = bin(OccurrenceTime, binval));\r\nunion isfuzzy=true view,zeroTimeTable,(\r\n    database('db').['TextFileLogs']\r\n    | where FileName matches regex searchFileNameRegex\r\n    | where FileLineContent contains searchTerm\r\n    | distinct FileName,LineNumber,FileLineContent\r\n    | extend SummaryInfo=extract(@\"(\\d\\d\\/\\d\\d\\/\\d\\d\\d\\d \\d\\d:\\d\\d:\\d\\d) AzureStack Cloud Validation Result: (\\w*)\",2,FileLineContent)\r\n    | extend OccurrenceTime=ExtractTimeFromFileName(FileName)\r\n    | extend Healthy=tostring(SummaryInfo)==\"PASS\",Source=\"Test-AzureStack\"\r\n    | project OccurrenceTime,tolong(Healthy),Source\r\n)\r\n| project Healthy,OccurrenceTime,Source | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "VaaS - Test-AzureStack Health Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "VaaS - Faults Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "935708d1-c4a7-4222-8502-23c6ac82f1e8",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(OccurrenceTime:datetime,FaultActionName:string,Result:bool) [];\r\nlet startTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-VaaS*'] | summarize min(OccurrenceTime));\r\nlet endTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-VaaS*'] | summarize max(OccurrenceTime));\r\nlet bintype = 10m;\r\nlet zeroTimeTable =  (range x from 1 to 1 step 1 | mvexpand OccurrenceTime = range(startTime, endTime, bintype) to typeof(datetime) limit 8640);\r\nlet VaasFaultTimeline = union isfuzzy=true view,(database('db').['ETL-Microsoft-VaaS-FaultEngine.FaultControllerExecuteStart']\r\n| join database('db').['ETL-Microsoft-VaaS-FaultEngine.FaultControllerExecuteStop'] on ActivityID\r\n| distinct FaultActionName,ResourceType,ResourceName,Result,OccurrenceTime,OccurrenceTime1\r\n| project Result,isValue=1,FaultActionName,ResourceType,ResourceName,StartTime=OccurrenceTime, EndTime=OccurrenceTime1\r\n| mvexpand OccurrenceTime = range(StartTime, EndTime, bintype) to typeof(datetime)\r\n| project OccurrenceTime, FaultActionName, Result);\r\nunion VaasFaultTimeline,zeroTimeTable\r\n| summarize Count=countif(isempty(FaultActionName)==false) by  bin(OccurrenceTime, bintype), Result\r\n| summarize sum(Count) by bin(OccurrenceTime, time(10m)) | sort by OccurrenceTime asc"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "VaaS - Faults Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "VaaS - ARM Deployments Timeline",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "036cf838-faea-47e1-beb4-6255b2ecd5b3",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxsize=128000000;alias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(Succeeded:long,Failed:long,OccurrenceTime:datetime) [];\r\nlet startTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-VaaS*'] | summarize min(OccurrenceTime));\r\nlet endTime = toscalar(union isfuzzy=true view,database(\"db\").['ETL-Microsoft-VaaS*'] | summarize max(OccurrenceTime));\r\nlet binval = 10m;\r\nlet zeroTimeTable =  (range x from 1 to 1 step 1 | mvexpand OccurrenceTime = range(startTime, endTime, binval) to typeof(datetime));\r\nunion isfuzzy=true view,(database('db').['ETL-Microsoft-AzureStack-Frontdoor.DeploymentOperations']\r\n| distinct OccurrenceTime,DurationInMilliseconds,ExecutionStatus,ProviderNamespace,ResourceType\r\n| where OccurrenceTime<endTime and OccurrenceTime>startTime\r\n| union zeroTimeTable\r\n| summarize \r\n    Succeeded=countif(ExecutionStatus==\"Succeeded\"),\r\n    Failed=countif(ExecutionStatus==\"Failed\") by bin(OccurrenceTime, binval))\r\n | fork (summarize sum(Succeeded) by bin(OccurrenceTime, time(10m)) | sort by OccurrenceTime asc | limit 5000) (summarize sum(Failed) by bin(OccurrenceTime, time(10m)) | sort by OccurrenceTime asc | limit 5000) "
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "VaaS - ARM Deployments Timeline"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "VaaS - VM Creation throughput",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "2bbe3227-aab9-4062-8dc8-260a0779a143",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set truncationmaxsize=128000000;alias database db = cluster('{cluster}').database('{database}');\r\nlet startTime = toscalar(union database(\"db\").['ETL-Microsoft-VaaS*'] | summarize min(OccurrenceTime));\r\nlet endTime = toscalar(union database(\"db\").['ETL-Microsoft-VaaS*'] | summarize max(OccurrenceTime));\r\nlet binval = 10m;\r\nlet zeroTimeTable =  (range x from 1 to 1 step 1\r\n    | mvexpand OccurrenceTime = range(startTime, endTime, binval) to typeof(datetime));\r\ndatabase('db').['ETL-CrpServiceEventSource.ApiQosEvent']\r\n| where OperationName==\"VirtualMachines.ResourceOperation.PUT\" \r\n| where ResultType!=1\r\n| distinct OccurrenceTime,OperationName,ResultType,DurationInMilliseconds,ResultCode,CorrelationId\r\n| where OccurrenceTime<endTime and OccurrenceTime>startTime\r\n| summarize OccurrenceTime=max(OccurrenceTime),ResultCode=strcat(makeset(ResultCode)),ResultType=any(ResultType),FirstToLastInMs=tolong((max(OccurrenceTime)-min(OccurrenceTime))/1ms) by CorrelationId\r\n| join kind=leftouter (\r\n    database('db').['ETL-Microsoft-AzureStack-Compute-Pipeline.VmPipelineRunStop']\r\n    | distinct OccurrenceTime,CorrelationId,DurationInMs,Exception\r\n    | summarize DurationInMs=sum(DurationInMs),Exception=any(Exception) by CorrelationId)\r\non CorrelationId\r\n| extend ResultCode=trim(@\"[\\[\\]\\\"\"]*\", ResultCode), Duration=iff(DurationInMs>FirstToLastInMs,DurationInMs,FirstToLastInMs), isSuccess=isempty(Exception) and ResultType!=2\r\n| project OccurrenceTime,isSuccess,DurationInMs=Duration,isValue=true\r\n| union zeroTimeTable\r\n| summarize \r\n    Succeeded=countif(isValue==true and isSuccess==true),\r\n    Failed=countif(isValue==true and isSuccess==false),\r\n    AvgDuration=avg(DurationInMs)/60000 by bin(OccurrenceTime, binval)"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "VaaS - VM Creation throughput"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "VaaS - Test Case Failures By Name",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33{}"
+          }
+        ],
+        "id": "26996e98-ee72-4e75-b967-2d1a7a20ef2e",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(TestCaseName:string,ErrorMessage:string,id:string) [];\r\nunion isfuzzy=true view,(database(\"db\").['ETL-Microsoft-VaaS-TestSuite.TestCaseStop']\r\n| project OccurrenceTime,TestCaseName,IsSuccess,ErrorMessage,id=tostring(Properties.id)\r\n| distinct OccurrenceTime,TestCaseName,IsSuccess,ErrorMessage,id\r\n| where IsSuccess==false\r\n)"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "VaaS - Test Case Failures By Name"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "VaaS - Test Case Failures",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33{}"
+          }
+        ],
+        "id": "f4de47ef-c528-4a02-82a3-b7b67861f193",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(OccurrenceTime:datetime,TestCaseName:string,FormattedMessage:string,CorrelationId:string,ResourceGroupName:string,DeploymentGuid:string,VMName:string,SubscriptionId:string) [];\r\nunion isfuzzy=true view,(database(\"db\").['ETL-Microsoft-VaaS-TestSuite.TestCaseStop']\r\n    | where not(IsSuccess)\r\n    | project OccurrenceTime,TestCaseName,FormattedMessage\r\n    | distinct OccurrenceTime,TestCaseName,FormattedMessage\r\n    | extend CorrelationId1=extract(@\"request correlation id '([\\w-]*)'\",1, FormattedMessage),\r\n             CorrelationId2=extract(@\"RequestId: ([\\w-]*),\",1, FormattedMessage),\r\n             ResourceGroupName1=extract(@\"RG Name: ([\\w-]*),\",1, FormattedMessage),\r\n             ResourceGroupName2=extract(@\"ResourceGroupName=([\\w-]*)\",1, FormattedMessage),\r\n             DeploymentGuid=extract(@\"DeploymentGuid=([\\w-]*)\",1, FormattedMessage),\r\n             VMName1=extract(@\"Failed to create VM \\'([\\w-_]*)\\'\",1, FormattedMessage),\r\n             VMName2=extract(@\"Input VM Name: ([\\w-]*),\",1, FormattedMessage),\r\n             SubscriptionId1=extract(@\"Subscription Id: ([\\w-]*)\",1,FormattedMessage),\r\n             SubscriptionId2=extract(@\"subscription id '([\\w-]*)'\",1,FormattedMessage),\r\n             SubscriptionId3=extract(@\"Subscription id: ([\\w-]*)\",1,FormattedMessage)\r\n    | extend ResourceGroupName=coalesce(ResourceGroupName1,ResourceGroupName2),\r\n             CorrelationId=coalesce(CorrelationId1, CorrelationId2),\r\n             VMName=coalesce(VMName1,VMName2),\r\n             SubscriptionId=coalesce(SubscriptionId1,SubscriptionId2,SubscriptionId3)\r\n)\r\n| project OccurrenceTime,TestCaseName,FormattedMessage,CorrelationId,ResourceGroupName,DeploymentGuid,VMName,SubscriptionId\r\n| extend Cluster='{cluster}', Database='{database}', FrontendLink1=iff(notempty(SubscriptionId),\"10 min window\",\"\"),FrontendLink2=iff(notempty(SubscriptionId),\"1 hour window\",\"\"),Window1Start=OccurrenceTime-10m,Window2Start=OccurrenceTime-1h\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "VaaS - Test Case Failures"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "SteadyState - TestCase Status",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "8b4e99b3-3b4f-4830-bc18-969326fe17cc",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet data = (union withsource=SourceTable database('db').['ETL-Microsoft-VaaS-TestSuite*'] | summarize by Operation, DebugMessage, OccurrenceTime, FormattedMessage);\r\nlet ErrorStart = (\r\ndata \r\n| sort by OccurrenceTime\r\n| extend StartMessage = FormattedMessage\r\n| where StartMessage contains \"Error Started\"\r\n| distinct StartMessage, Operation\r\n| extend ErrorStartTime = extract(@\" Details = ([\\w-\\s].*)\", 1, StartMessage) \r\n| extend Index = extract(@\" Index = ([\\w-]*)\", 1, StartMessage) \r\n| extend FileName = extract(@\"(\\d{1,3}\\.){3}\\d{1,3}\", 0, StartMessage)\r\n| distinct Operation, todatetime(ErrorStartTime), Index, FileName\r\n);\r\nlet ErrorEnd = (\r\ndata \r\n| sort by OccurrenceTime\r\n| extend EndMessage = FormattedMessage\r\n| where EndMessage contains \"Error Ended\"\r\n| distinct EndMessage, Operation\r\n| extend ErrorEndTime = extract(@\" Details = ([\\w-\\s].*)\", 1, EndMessage) \r\n| extend Index = extract(@\" Index = ([\\w-]*)\", 1, EndMessage) \r\n| extend FileName = extract(@\"(\\d{1,3}\\.){3}\\d{1,3}\", 0, EndMessage)\r\n| distinct Operation, todatetime(ErrorEndTime), Index, FileName\r\n);\r\nlet ErrorDuration = (\r\ndata \r\n| sort by OccurrenceTime\r\n| where FormattedMessage contains \"Error Duration\"\r\n| distinct FormattedMessage, Operation\r\n| extend Duration = extract(@\" Details = ([\\w-\\s].*)\", 1, FormattedMessage) \r\n| extend Index = extract(@\" Index = ([\\w-]*)\", 1, FormattedMessage) \r\n| extend FileName = extract(@\"(\\d{1,3}\\.){3}\\d{1,3}\", 0, FormattedMessage)\r\n| distinct Operation, totimespan(Duration), Index, FileName\r\n);\r\nlet DeploymentInfo = (\r\ndata | extend DeploymentStatus = extract(@\"Template Deployment status is ([\\w-]*)\", 1, DebugMessage) \r\n| where isempty(DeploymentStatus) != true\r\n| extend DeploymentCompletion = OccurrenceTime\r\n| project DeploymentStatus , Operation, DeploymentCompletion\r\n);\r\nlet TestCaseInfo = (\r\ndata \r\n| where DebugMessage contains \"has Started.\"\r\n| extend TestCaseName = extract(@\"Test case ([\\w-]*)\", 1, DebugMessage) \r\n| where isempty(TestCaseName) != true\r\n| extend TestCaseStart = OccurrenceTime\r\n| project TestCaseName , Operation, TestCaseStart\r\n);\r\nlet CompletedTestCases = (\r\ndata\r\n| where DebugMessage contains \" has finished; \"\r\n| extend TestCaseEnd = OccurrenceTime\r\n| extend TestCaseStatus = extract(@\" result = ([\\w-]*)\", 1, DebugMessage) \r\n| extend TestCaseStatus = iff(TestCaseStatus == \"True\",\"Passed\", \"Failed\") \r\n| project Operation, TestCaseEnd , TestCaseStatus\r\n);\r\nlet CorrelationInfo = (\r\ndata | extend CorrelationId = extract(@\"CorrelationId = ([\\w-]*)\", 1, DebugMessage) \r\n| where isempty(CorrelationId) != true\r\n| distinct CorrelationId , Operation\r\n);\r\nlet DiskspdStatus = (\r\ndata\r\n| where DebugMessage contains \"with Diskspd Success\"\r\n| extend DisksPDStatus = extract(@\" with Diskspd Success = ([\\w-]*)\", 1, DebugMessage) \r\n| extend DisksPDStatus = iff(DisksPDStatus == \"True\",\"Passed\", \"Failed\")\r\n| project Operation, DisksPDStatus\r\n);\r\nlet VmStatus = (\r\ndata\r\n| where DebugMessage contains \"HeartBeatError = \"\r\n| extend VMRestarted = extract(@\"HeartBeatError = ([\\w-]*)\", 1, DebugMessage) \r\n| project Operation, VMRestarted\r\n);\r\nlet TestCaseStatus = (\r\nTestCaseInfo \r\n| join DeploymentInfo on Operation\r\n| distinct TestCaseName , Operation, TestCaseStart, DeploymentCompletion, DeploymentStatus\r\n| join kind = fullouter (CorrelationInfo) on Operation\r\n| distinct TestCaseName , Operation, TestCaseStart, DeploymentCompletion, DeploymentStatus, CorrelationId\r\n| join kind = fullouter (DiskspdStatus) on Operation\r\n| distinct TestCaseName , Operation, TestCaseStart, DeploymentCompletion, DeploymentStatus, DisksPDStatus , CorrelationId\r\n| extend DisksPDStatus = iff(isempty(DisksPDStatus), \"N/A\", DisksPDStatus)\r\n| join kind = fullouter (CompletedTestCases) on Operation\r\n| distinct TestCaseName , Operation, TestCaseStart, DeploymentCompletion, DeploymentStatus, DisksPDStatus , CorrelationId, TestCaseEnd, TestCaseStatus\r\n| join kind = fullouter (VmStatus) on Operation\r\n| distinct TestCaseName , Operation, TestCaseStart, DeploymentCompletion, DeploymentStatus, DisksPDStatus , CorrelationId, TestCaseEnd, TestCaseStatus, VMRestarted\r\n| extend VMRestarted = iff(isempty(VMRestarted), iff(DeploymentStatus == \"DeploymentFailed\", \"N/A\", \"N/A\"), VMRestarted)\r\n| extend TestCaseStatus = iff(isempty(TestCaseStatus) and isempty(TestCaseEnd), \"Not Completed\", TestCaseStatus)\r\n);\r\nErrorStart\r\n| join ErrorEnd on Index, Operation,FileName\r\n| distinct Operation, ErrorStartTime, ErrorEndTime, FileName, Index\r\n| extend Duration = ErrorEndTime - ErrorStartTime\r\n| extend Index = toint(Index)\r\n| summarize Duration=min(Duration) by Index , Operation, FileName \r\n| summarize FaultDuration= sum(Duration) by Operation \r\n| join kind= fullouter (TestCaseStatus) on Operation\r\n| project Operation = Operation1, TestCaseName , TestCaseStart, DeploymentCompletion, DeploymentStatus, DisksPDStatus , CorrelationId, TestCaseEnd, TestCaseStatus, VMRestarted, FaultDuration \r\n| where isempty(Operation) == false\r\n| project DeploymentGuid = Operation, TestCaseName , DeploymentStatus, DisksPDStatus , CorrelationId, TestCaseStatus, VMRestarted, FaultDuration \r\n| extend Cluster='{cluster}', Database='{database}'\r\n| extend DrillDownDashboard = iff(TestCaseName contains \"EastWest\", \"EastWestDash\", \"NorthSouthDash\")\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "SteadyState - TestCase Status"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "VaaS - Admin Actions Detail",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "96354963-97f7-48bc-b1bd-b9235a969988",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(AdminOperationName:string,StartTime:datetime,EndTime:datetime,Result:string,Exception:string) [];\r\nunion isfuzzy=true view,(database('db').['ETL-Microsoft-VaaS-AdminOpOrchestrator.AdminOrchestratorOperationStart']\r\n| project OccurrenceTime,AdminOperationName,CorrelationId\r\n| summarize StartTime=min(OccurrenceTime) by AdminOperationName,CorrelationId\r\n| join (\r\n    database('db').['ETL-Microsoft-VaaS-AdminOpOrchestrator.AdminOrchestratorOperationStop']\r\n    | project OccurrenceTime,CorrelationId,Result\r\n    | summarize EndTime=max(OccurrenceTime),Result=min(Result) by CorrelationId\r\n    ) on CorrelationId\r\n| join kind=leftouter (\r\n    union isfuzzy=true (datatable(Exception:string,CorrelationId:string,OccurrenceTime:datetime)[]),database('db').['ETL-Microsoft-VaaS-AdminOpOrchestrator.AdminOrchestratorOperationException']\r\n    | project Exception,CorrelationId,OccurrenceTime\r\n    | distinct *\r\n    ) on CorrelationId \r\n| project AdminOperationName,StartTime,EndTime,Result=case(Result==-1,\"Failed\",\"Passed\"),Exception\r\n| order by StartTime asc)\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "VaaS - Admin Actions Detail"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "VaaS - Test-AzureStack Failure Instances",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "823281d8-20c1-46fb-a277-a8c0a3669fde",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view = datatable(OccurrenceTime:datetime,SummaryInfo:string,SummaryFile:string,LogFile:string)[];\r\nlet searchFileNameRegex = @\"AzureStack_Validation_(Summary|Trace)_([_\\d\\.]*)(.HTML|.html|.log|.LOG)\";\r\nlet timeExtractionRegex = @\"(\\d{4}).(\\d{2}).(\\d{2})_(\\d{2}).(\\d{2}).(\\d{2})\";\r\nlet searchTerm = \"AzureStack Cloud Validation Result:\";\r\nlet replaceString = @\"\\1-\\2-\\3 \\4:\\5:\\6\";\r\nlet ExtractTimeFromFileName = (fileName:string){todatetime(replace(timeExtractionRegex,replaceString,extract(searchFileNameRegex,2,fileName)))};\r\nunion isfuzzy=true view,(\r\n    database('db').TextFileLogs\r\n    | where FileName matches regex searchFileNameRegex\r\n    | extend SummaryInfo=extract(@\"(\\d\\d\\/\\d\\d\\/\\d\\d\\d\\d \\d\\d:\\d\\d:\\d\\d) AzureStack Cloud Validation Result: (\\w*)\",2,FileLineContent)\r\n    | distinct FileName,SummaryInfo\r\n    | extend AzsLogCollectionFolder=extract(@\"(AzureStackLogs-\\d*)\",1,FileName)\r\n    | extend OccurrenceTime = ExtractTimeFromFileName(FileName)\r\n    | extend OccurrenceTime=OccurrenceTime+7h \r\n    | extend LogFileName=iff(FileName endswith \".log\",FileName,\"\"),SummaryFileName=iff(FileName endswith \".html\",FileName,\"\")\r\n    | summarize SummaryInfo=any(SummaryInfo),SummaryFile=any(SummaryFileName),LogFile=any(LogFileName) by OccurrenceTime,AzsLogCollectionFolder\r\n    | where SummaryInfo !~ \"pass\"\r\n    | order by OccurrenceTime asc\r\n)\r\n| extend Cluster='{cluster}', Database='set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view = datatable(OccurrenceTime:datetime,SummaryInfo:string,SummaryFile:string,LogFile:string)[];\r\nlet searchFileNameRegex = @\"AzureStack_Validation_(Summary|Trace)_([_\\d\\.]*)(.HTML|.html|.log|.LOG)\";\r\nlet timeExtractionRegex = @\"(\\d{4}).(\\d{2}).(\\d{2})_(\\d{2}).(\\d{2}).(\\d{2})\";\r\nlet searchTerm = \"AzureStack Cloud Validation Result:\";\r\nlet replaceString = @\"\\1-\\2-\\3 \\4:\\5:\\6\";\r\nlet ExtractTimeFromFileName = (fileName:string){todatetime(replace(timeExtractionRegex,replaceString,extract(searchFileNameRegex,2,fileName)))};\r\nunion isfuzzy=true view,(\r\n    database('db').TextFileLogs\r\n    | where FileName matches regex searchFileNameRegex\r\n    | extend SummaryInfo=extract(@\"(\\d\\d\\/\\d\\d\\/\\d\\d\\d\\d \\d\\d:\\d\\d:\\d\\d) AzureStack Cloud Validation Result: (\\w*)\",2,FileLineContent)\r\n    | distinct FileName,SummaryInfo\r\n    | extend AzsLogCollectionFolder=extract(@\"(AzureStackLogs-\\d*)\",1,FileName)\r\n    | extend OccurrenceTime = ExtractTimeFromFileName(FileName)\r\n    | extend OccurrenceTime=OccurrenceTime+7h \r\n    | extend LogFileName=iff(FileName endswith \".log\",FileName,\"\"),SummaryFileName=iff(FileName endswith \".html\",FileName,\"\")\r\n    | summarize SummaryInfo=any(SummaryInfo),SummaryFile=any(SummaryFileName),LogFile=any(LogFileName) by OccurrenceTime,AzsLogCollectionFolder\r\n    | where SummaryInfo !~ \"pass\"\r\n    | order by OccurrenceTime asc\r\n)\r\n| extend Cluster='{cluster}', Database='{database}'\r\n\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "VaaS - Test-AzureStack Failure Instances"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "VaaS - Faults Detail",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "00d921a6-833b-442d-b3b8-af9fe60f6d6a",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet view=datatable(FaultActionName:string,ResourceType:string,ResourceName:string,Result:string,StartTime:datetime,EndTime:datetime) [];\r\nunion isfuzzy=true view,(database('db').['ETL-Microsoft-VaaS-FaultEngine.FaultControllerExecuteStart']\r\n| join database('db').['ETL-Microsoft-VaaS-FaultEngine.FaultControllerExecuteStop'] on ActivityID\r\n| distinct FaultActionName,ResourceType,ResourceName,Result,OccurrenceTime,OccurrenceTime1\r\n| project FaultActionName,ResourceType,ResourceName,Result=case(Result,\"Passed\",\"Failed\"),StartTime=OccurrenceTime,EndTime=OccurrenceTime1\r\n| order by StartTime asc)\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "VaaS - Faults Detail"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "VaaS - ARM Deployment Failures",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "ce66a931-44b2-42aa-b99f-6ecb001f0c34",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet startTime = toscalar(union database(\"db\").['ETL-Microsoft-VaaS*'] | summarize min(OccurrenceTime));\r\nlet endTime = toscalar(union database(\"db\").['ETL-Microsoft-VaaS*'] | summarize max(OccurrenceTime));\r\ndatabase('db').['ETL-Microsoft-AzureStack-Frontdoor.DeploymentOperations']\r\n| where ExecutionStatus==\"Failed\"\r\n| where OccurrenceTime < endTime and OccurrenceTime > startTime \r\n| distinct OccurrenceTime,CorrelationId,ResourceGroupName,DeploymentName,ProviderNamespace,ResourceType,ResourceName\r\n| project CorrelationId,Troubleshoot=\"Troubleshoot\",FullSearch=\"Full Search\",ResourceGroupName,DeploymentName,ProviderNamespace,ResourceType,ResourceName\r\n| extend Cluster='{cluster}', Database='{database}'\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "VaaS - ARM Deployment Failures"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      },
+      {
+        "activityDisplayName": "VaaS - VM Creation Failures",
+        "activityType": "DataMovement",
+        "parameters": [
+          {
+            "name": "cluster",
+            "value": "masvaas"
+          },
+          {
+            "name": "database",
+            "value": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          }
+        ],
+        "id": "f2f36dd1-7d58-409e-ba69-1bd16a5899ae",
+        "transformEngine": "Kusto",
+        "input": {
+          "type": "KustoQuery",
+          "connectionName": "8861b1ad-ae21-41e1-b742-f59ee4c1ad43",
+          "query": "set query_take_max_records=5000;\r\nalias database db = cluster('{cluster}').database('{database}');\r\nlet startTime = toscalar(union database(\"db\").['ETL-Microsoft-VaaS*'] | summarize min(OccurrenceTime));\r\nlet endTime = toscalar(union database(\"db\").['ETL-Microsoft-VaaS*'] | summarize max(OccurrenceTime));\r\ndatabase('db').['ETL-CrpServiceEventSource.ApiQosEvent']\r\n| where OperationName==\"VirtualMachines.ResourceOperation.PUT\" \r\n| where ResultType!=1\r\n| distinct OccurrenceTime,OperationName,ResourceName,ResultType,DurationInMilliseconds,ResultCode,CorrelationId\r\n| summarize OccurrenceTime=max(OccurrenceTime),VmName=any(ResourceName),ResultCode=strcat(makeset(ResultCode)),ResultType=any(ResultType),FirstToLastInMs=tolong((max(OccurrenceTime)-min(OccurrenceTime))/1ms) by CorrelationId\r\n| join kind=leftouter (\r\n    database('db').['ETL-Microsoft-AzureStack-Compute-Pipeline.VmPipelineRunStop']\r\n    | distinct OccurrenceTime,CorrelationId,DurationInMs,Exception\r\n    | summarize DurationInMs=sum(DurationInMs),Exception=any(Exception) by CorrelationId)\r\non CorrelationId\r\n| extend ResultCode=trim(@\"[\\[\\]\\\"\"]*\", ResultCode), Duration=iff(DurationInMs>FirstToLastInMs,DurationInMs,FirstToLastInMs), isSuccess=isempty(Exception) and ResultType!=2\r\n| where OccurrenceTime<endTime and OccurrenceTime>startTime\r\n| where not(isSuccess)\r\n| order by OccurrenceTime asc\r\n| project CorrelationId,Troubleshoot=\"Troubleshoot\",FullSearch='Full Search',VmName,ResultCode,Exception,Cluster='{cluster}', Database='{database}'\r\n"
+        },
+        "output": {
+          "type": "KustoTable",
+          "tableType": "Snapshot",
+          "connectionName": "40373140-e4e5-4527-a01e-563718ea4599",
+          "table": "VaaS - VM Creation Failures"
+        },
+        "validationQuery": "",
+        "maxReprocessingAge": null
+      }
+    ],
+    "project": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342",
+    "context": {
+      "uiCron": {
+        "freq": "day",
+        "rate": 1,
+        "value": "0 38 20 */1 * *",
+        "isEntered": false,
+        "hourMins": 18,
+        "minuteSecs": 39,
+        "time": "2019-10-03T03:38:15.194Z",
+        "weekDays": [
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        "monthDay": 1
+      },
+      "lensScenario": null,
+      "lensCreatedBy": "v-vasub",
+      "lensCreatedDate": "2019-10-02T20:41:00.327531Z",
+      "lensModifiedBy": "v-vasub",
+      "lensModifiedDate": "2019-10-02T23:03:39.74565Z"
+    },
+    "failureWebhook": {
+      "url": "https://lens.msftcloudes.com/share/jobnotificationemail",
+      "aadResource": "aa0c39bf-5086-4900-bf89-6404bff62cf8",
+      "aadTenant": "microsoft.onmicrosoft.com"
+    }
+  },
+  "createdBy": "v-vasub",
+  "createdDate": "2019-10-02T20:41:00.327531Z",
+  "nextExecutionDate": "2019-10-03T20:38:00Z",
+  "modifiedBy": "v-vasub",
+  "modifiedDate": "2019-10-02T23:03:39.74565Z",
+  "version": "20",
+  "isEnabled": true,
+  "isQuarantined": false,
+  "instances": [
+    {
+      "id": "lens-9f42ae2a-5f93-4238-9c42-24f6d050b342|cf4b8f6080304447bea366d6f4caf864|M|2019-10-02T20:41:14.7574983Z",
+      "jobId": "cf4b8f6080304447bea366d6f4caf864",
+      "workspace": "9f42ae2a-5f93-4238-9c42-24f6d050b342",
+      "status": "Succeeded",
+      "jobStatus": "0",
+      "errorMsg": null,
+      "createdDate": "2019-10-02T20:41:14Z",
+      "startTime": "2019-10-02T20:41:14Z",
+      "endTime": "2019-10-02T20:41:24Z",
+      "elapsedTime": "2019-10-03T00:00:10.2199736Z",
+      "seed": "2019-10-01T20:38:00Z",
+      "logLink": "https://analytics.applicationinsights.io/subscriptions/56dcf710-f955-442e-8ac2-3b90ab65dea1/resourcegroups/datastudioorchestrator/components/datastudiojobs?q=H4sIAAAAAAAEAFWQzU7DMBCE70i8w96aCBc5IahtpHDqBalwIXfk2itwlTjGdqCR%2bvCsm6Y%2fJ3t31jP7uTe6M5A4%2fOnRB58ySBRaNAqN1HisgxMSPRwA94EEUBiEbjxUoAYjWi0T0zdNGp%2fiXqIN5BjHret2KAME3ZK1aC2DzqITUf98VQzoMZKLNgZd2%2flQDxYZ0LAXXzfC29hiU3R6f3eAv290eOMIVQWzbtiu680Oe7GsZiBo33M%2bvNDKImBsJDnPVvOMz3le57wssjIrHhfPi2K1fHrgvOT8GDIx1BMD7Xv2Y%2fCBv%2bh0GDZ0NiT565rB%2bwgYORmcIGjqRMhgffnJ8Ra5OqfQwXaAS6ZCL%2f8BrFPC46kBAAA%3d&apptype=web",
+      "elapsedMilliseconds": 10219,
+      "parameters": {
+        "startDateTime": "2019-10-01T20:38:00Z",
+        "endDateTime": "2019-10-02T20:38:00Z"
+      },
+      "segments": [
+        {
+          "segmentId": "8e9ddff7-3831-4fe8-931e-83d2032c154c",
+          "startTime": "2019-10-02T20:41:14.8198862Z",
+          "endTime": "2019-10-02T20:41:22.4143037Z",
+          "parameters": {
+            "cluster": "masvaas",
+            "database": "TenantAvailabilityPNU-TestPass-MAS_Prod_1.1908.4.32-20190917181045-5454420b-2e38-4b9e-8b56-1712d321cf33"
+          },
+          "segmentName": "Process data"
+        }
+      ],
+      "groupId": null
+    }
+  ],
+  "shareType": "shared",
+  "eTag": ""
+}
